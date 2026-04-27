@@ -1,8 +1,5 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
-import { RedisModule } from '../redis/redis.module';
-import { SocketModule } from '../socket/socket.module';
-import { RideMatchingProcessor } from './ride-matching.processor';
 
 @Module({
   imports: [
@@ -24,9 +21,6 @@ import { RideMatchingProcessor } from './ride-matching.processor';
         removeOnFail: 1000,
       },
     }),
-    RedisModule,
-    SocketModule,
   ],
-  providers: [RideMatchingProcessor],
 })
 export class QueueModule {}

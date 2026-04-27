@@ -55,16 +55,19 @@ export class OrderService {
       },
     });
 
-    await this.rideMatchingQueue.add('find-driver', {
-      rideId: ride.id,
-      pickupLat: ride.pickupLat,
-      pickupLng: ride.pickupLng,
-    }, {
-      attempts: 4,
-      backoff: { type: 'exponential', delay: 5000 },
-      removeOnComplete: true,
-      removeOnFail: 1000,
-    });
+    await this.rideMatchingQueue.add(
+      'find-driver',
+      {
+        rideId: ride.id,
+        pickupLat: ride.pickupLat,
+        pickupLng: ride.pickupLng,
+        attempt: 1,
+      },
+      {
+        removeOnComplete: true,
+        removeOnFail: 1000,
+      },
+    );
 
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.NEW_ORDER, ride);
     this.socket.emitToOrder(ride.id, RealtimeEvent.NEW_ORDER, ride);

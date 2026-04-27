@@ -34,6 +34,7 @@ backend/src/
     auth/
     user/
     driver/
+    matching/
     order/
     pricing/
     payment/
@@ -82,9 +83,11 @@ Matching Engine:
 
 - takes order pickup coordinates
 - searches drivers through Redis GEO
-- sorts nearest drivers
-- sends offers in batches
-- falls back if nobody accepts
+- filters drivers by `ONLINE` status
+- sends offers with a short TTL
+- schedules the next matching attempt if nobody accepts
+- expands search radius on each attempt
+- cancels the ride with `NO_DRIVERS_AVAILABLE` after the final attempt
 
 Pricing Service:
 

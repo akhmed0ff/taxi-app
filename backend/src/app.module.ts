@@ -9,6 +9,7 @@ import { RedisModule } from './infrastructure/redis/redis.module';
 import { SocketModule } from './infrastructure/socket/socket.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { DriverModule } from './modules/driver/driver.module';
+import { MatchingModule } from './modules/matching/matching.module';
 import { OrderModule } from './modules/order/order.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { PricingModule } from './modules/pricing/pricing.module';
@@ -30,6 +31,7 @@ import { UserModule } from './modules/user/user.module';
     AuthModule,
     UserModule,
     DriverModule,
+    MatchingModule,
     RedisModule,
     OrderModule,
     PricingModule,
