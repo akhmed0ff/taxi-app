@@ -52,7 +52,7 @@ export class DriverRealtimeClient {
         },
         price: payload.ride.estimatedFare ?? 0,
         distanceMeters: payload.distanceMeters ?? 0,
-        expiresInSeconds: payload.expiresInSeconds ?? 25,
+        expiresInSeconds: payload.expiresInSeconds ?? 10,
       });
     };
 

@@ -44,7 +44,7 @@ export default function App() {
       unsubscribe = driverRealtimeClient.onNewOrder((nextOffer) => {
         setOffer({
           ...nextOffer,
-          expiresInSeconds: nextOffer.expiresInSeconds ?? 25,
+          expiresInSeconds: nextOffer.expiresInSeconds ?? 10,
         });
         setScreen('offer');
       });

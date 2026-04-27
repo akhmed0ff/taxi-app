@@ -21,40 +21,45 @@ export function useDriverLocationTracking({
     }
 
     let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
 
-    const sendLocation = async () => {
+    void (async () => {
       const permission = await Location.requestForegroundPermissionsAsync();
 
       if (permission.status !== 'granted' || cancelled) {
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({});
+      const sendLocation = async () => {
+        const location = await Location.getCurrentPositionAsync({});
 
-      if (cancelled) {
-        return;
-      }
+        if (cancelled) {
+          return;
+        }
 
-      try {
-        await updateDriverLocation(
-          accessToken,
-          driverId,
-          location.coords.latitude,
-          location.coords.longitude,
-        );
-      } catch (error) {
-        console.warn(error);
-      }
-    };
+        try {
+          await updateDriverLocation(
+            accessToken,
+            driverId,
+            location.coords.latitude,
+            location.coords.longitude,
+          );
+        } catch (error) {
+          console.warn(error);
+        }
+      };
 
-    void sendLocation();
-    const timer = setInterval(() => {
       void sendLocation();
-    }, intervalMs);
+      timer = setInterval(() => {
+        void sendLocation();
+      }, intervalMs);
+    })();
 
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      if (timer) {
+        clearInterval(timer);
+      }
     };
   }, [accessToken, driverId, enabled, intervalMs]);
 }
