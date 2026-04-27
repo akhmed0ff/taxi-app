@@ -1,7 +1,22 @@
 import { io, Socket } from 'socket.io-client';
-import { Coords, OrderOffer } from '../types/order';
+import { OrderOffer } from '../types/order';
 
 const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL ?? 'http://localhost:3000';
+
+interface NewOrderPayload {
+  ride?: {
+    id: string;
+    pickupLat: number;
+    pickupLng: number;
+    pickupAddress?: string;
+    dropoffLat: number;
+    dropoffLng: number;
+    dropoffAddress?: string;
+    estimatedFare?: number;
+  };
+  distanceMeters?: number;
+  expiresInSeconds?: number;
+}
 
 export class DriverRealtimeClient {
   private socket?: Socket;
@@ -16,12 +31,33 @@ export class DriverRealtimeClient {
   }
 
   onNewOrder(handler: (order: OrderOffer) => void) {
-    this.socket?.on('NEW_ORDER', handler);
-    return () => this.socket?.off('NEW_ORDER', handler);
-  }
+    const wrappedHandler = (payload: NewOrderPayload) => {
+      if (!payload.ride) {
+        return;
+      }
 
-  emitLocationUpdate(coords: Coords) {
-    this.socket?.emit('LOCATION_UPDATE', coords);
+      handler({
+        id: payload.ride.id,
+        pickupAddress: payload.ride.pickupAddress ?? 'Pickup',
+        dropoffAddress: payload.ride.dropoffAddress ?? 'Dropoff',
+        pickup: {
+          lat: payload.ride.pickupLat,
+          lng: payload.ride.pickupLng,
+        },
+        dropoff: {
+          lat: payload.ride.dropoffLat,
+          lng: payload.ride.dropoffLng,
+        },
+        price: payload.ride.estimatedFare ?? 0,
+        distanceMeters: payload.distanceMeters ?? 0,
+        expiresInSeconds: payload.expiresInSeconds ?? 25,
+      });
+    };
+
+    this.socket?.on('NEW_ORDER', wrappedHandler);
+    return () => {
+      this.socket?.off('NEW_ORDER', wrappedHandler);
+    };
   }
 
   disconnect() {

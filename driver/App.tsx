@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
 import { SafeAreaView, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { acceptOrder, updateDriverStatus } from './src/services/api';
+import {
+  acceptOrder,
+  completeTrip,
+  DriverSession,
+  loginDriver,
+  markArrived,
+  startTrip,
+  updateDriverStatus,
+} from './src/services/api';
 import { driverRealtimeClient } from './src/services/realtime';
 import { useDriverLocationTracking } from './src/hooks/useDriverLocationTracking';
 import { BalanceScreen } from './src/screens/BalanceScreen';
@@ -13,33 +21,32 @@ import { ActiveTrip, DriverStatus, OrderOffer } from './src/types/order';
 
 type Screen = 'online' | 'offer' | 'navigation' | 'trip' | 'balance';
 
-const DRIVER_ID = 'driver-demo';
-
-const demoOffer: OrderOffer = {
-  id: 'order-demo',
-  pickupAddress: 'Amir Temur Avenue',
-  dropoffAddress: 'Tashkent City Mall',
-  pickup: { lat: 41.3111, lng: 69.2797 },
-  dropoff: { lat: 41.316, lng: 69.248 },
-  price: 28000,
-  distanceMeters: 4300,
-  expiresInSeconds: 8,
-};
-
 export default function App() {
   const [screen, setScreen] = useState<Screen>('online');
+  const [session, setSession] = useState<DriverSession>();
   const [status, setStatus] = useState<DriverStatus>('OFFLINE');
   const [offer, setOffer] = useState<OrderOffer>();
   const [trip, setTrip] = useState<ActiveTrip>();
   const [earnedToday, setEarnedToday] = useState(0);
 
-  useDriverLocationTracking({ enabled: status !== 'OFFLINE' });
+  useDriverLocationTracking({
+    driverId: session?.driverId,
+    enabled: Boolean(session?.driverId) && status !== 'OFFLINE',
+  });
 
   useEffect(() => {
-    driverRealtimeClient.connect(DRIVER_ID);
-    const unsubscribe = driverRealtimeClient.onNewOrder((nextOffer) => {
-      setOffer({ ...nextOffer, expiresInSeconds: nextOffer.expiresInSeconds ?? 8 });
-      setScreen('offer');
+    let unsubscribe: () => void = () => undefined;
+
+    void loginDriver().then((nextSession) => {
+      setSession(nextSession);
+      driverRealtimeClient.connect(nextSession.accessToken);
+      unsubscribe = driverRealtimeClient.onNewOrder((nextOffer) => {
+        setOffer({
+          ...nextOffer,
+          expiresInSeconds: nextOffer.expiresInSeconds ?? 25,
+        });
+        setScreen('offer');
+      });
     });
 
     return () => {
@@ -49,19 +56,22 @@ export default function App() {
   }, []);
 
   async function toggleOnline() {
+    if (!session) {
+      return;
+    }
+
     const nextStatus = status === 'OFFLINE' ? 'ONLINE' : 'OFFLINE';
     setStatus(nextStatus);
-    void updateDriverStatus(DRIVER_ID, nextStatus);
-
-    if (nextStatus === 'ONLINE') {
-      setOffer(demoOffer);
-      setScreen('offer');
-    }
+    await updateDriverStatus(session.driverId, nextStatus);
   }
 
   async function handleAcceptOffer() {
-    const acceptedOffer = offer ?? demoOffer;
-    void acceptOrder(acceptedOffer.id, DRIVER_ID);
+    if (!offer || !session) {
+      return;
+    }
+
+    const acceptedOffer = offer;
+    await acceptOrder(acceptedOffer.id, session.driverId);
     setStatus('BUSY');
     setTrip({ ...acceptedOffer, status: 'ACCEPTED' });
     setScreen('navigation');
@@ -85,7 +95,8 @@ export default function App() {
       )}
       {screen === 'navigation' && trip && (
         <NavigationScreen
-          onArrived={() => {
+          onArrived={async () => {
+            await markArrived(trip.id);
             setTrip({ ...trip, status: 'DRIVER_ARRIVED' });
             setScreen('trip');
           }}
@@ -94,13 +105,17 @@ export default function App() {
       )}
       {screen === 'trip' && trip && (
         <TripScreen
-          onComplete={() => {
+          onComplete={async () => {
+            await completeTrip(trip.id);
             setEarnedToday((value) => value + trip.price);
             setTrip({ ...trip, status: 'COMPLETED' });
             setStatus('ONLINE');
             setScreen('balance');
           }}
-          onStart={() => setTrip({ ...trip, status: 'IN_PROGRESS' })}
+          onStart={async () => {
+            await startTrip(trip.id);
+            setTrip({ ...trip, status: 'IN_PROGRESS' });
+          }}
           trip={trip}
         />
       )}

@@ -7,7 +7,7 @@ import { HomeMapScreen } from './src/screens/HomeMapScreen';
 import { SearchDriverScreen } from './src/screens/SearchDriverScreen';
 import { TariffScreen } from './src/screens/TariffScreen';
 import { TripScreen } from './src/screens/TripScreen';
-import { createOrder } from './src/services/api';
+import { createOrder, CustomerSession, loginPassenger } from './src/services/api';
 import { realtimeClient } from './src/services/realtime';
 import { Order, Point, TariffClass } from './src/types/order';
 
@@ -15,7 +15,7 @@ type Screen = 'auth' | 'home' | 'tariff' | 'search' | 'trip' | 'complete';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('auth');
-  const [passengerId, setPassengerId] = useState('');
+  const [session, setSession] = useState<CustomerSession>();
   const [pickup, setPickup] = useState<Point>();
   const [dropoff, setDropoff] = useState<Point>();
   const [order, setOrder] = useState<Order>();
@@ -23,26 +23,42 @@ export default function App() {
   const canSelectTariff = useMemo(() => pickup && dropoff, [dropoff, pickup]);
 
   useEffect(() => {
-    if (!passengerId) {
+    if (!session?.accessToken) {
       return;
     }
 
-    realtimeClient.connect(passengerId);
+    realtimeClient.connect(session.accessToken);
     return () => realtimeClient.disconnect();
-  }, [passengerId]);
+  }, [session?.accessToken]);
 
   useEffect(() => {
     if (!order?.id) {
       return;
     }
 
-    return realtimeClient.subscribeToOrder(order.id, (payload) => {
-      setOrder((current) => (current ? { ...current, ...payload } : current));
+    return realtimeClient.subscribeToOrder(order.id, order.tariff, (payload) => {
+      setOrder((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const nextOrder = { ...current, ...payload };
+
+        if (nextOrder.status === 'DRIVER_ASSIGNED') {
+          setScreen('trip');
+        }
+
+        if (nextOrder.status === 'COMPLETED') {
+          setScreen('complete');
+        }
+
+        return nextOrder;
+      });
     });
-  }, [order?.id]);
+  }, [order?.id, order?.tariff]);
 
   async function handleTariffSelected(tariff: TariffClass, price: number) {
-    if (!pickup || !dropoff) {
+    if (!pickup || !dropoff || !session) {
       return;
     }
 
@@ -60,15 +76,21 @@ export default function App() {
 
     try {
       const createdOrder = await createOrder({
-        passengerId,
+        customerId: session.customerId,
         pickup,
         dropoff,
         tariff,
       });
-      setOrder({ ...fallbackOrder, ...createdOrder, price });
+      setOrder({ ...fallbackOrder, ...createdOrder });
     } catch {
       setOrder(fallbackOrder);
     }
+  }
+
+  async function handleAuthenticated(phone: string) {
+    const nextSession = await loginPassenger(phone);
+    setSession(nextSession);
+    setScreen('home');
   }
 
   return (
@@ -76,10 +98,7 @@ export default function App() {
       <StatusBar style="dark" />
       {screen === 'auth' && (
         <AuthScreen
-          onAuthenticated={(id) => {
-            setPassengerId(id);
-            setScreen('home');
-          }}
+          onAuthenticated={handleAuthenticated}
         />
       )}
       {screen === 'home' && (
@@ -95,13 +114,7 @@ export default function App() {
         <TariffScreen onTariffSelected={handleTariffSelected} />
       )}
       {screen === 'search' && order && (
-        <SearchDriverScreen
-          onDriverFound={(nextOrder) => {
-            setOrder(nextOrder);
-            setScreen('trip');
-          }}
-          order={order}
-        />
+        <SearchDriverScreen order={order} />
       )}
       {screen === 'trip' && order && (
         <TripScreen

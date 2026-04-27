@@ -31,4 +31,5 @@ export interface Order {
   tariff: TariffClass;
   price: number;
   driver?: DriverPreview;
+  driverLocation?: Point;
 }

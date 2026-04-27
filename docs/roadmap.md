@@ -72,6 +72,9 @@ Passenger app:
 - Driver search screen.
 - Active trip screen with driver location.
 - Trip completion screen.
+- Creates rides through `POST /orders`.
+- Joins `order:{id}` over Socket.IO after ride creation.
+- Reacts to `DRIVER_ACCEPTED`, `DRIVER_LOCATION`, `TRIP_STARTED` and `TRIP_COMPLETED`.
 
 Driver app:
 
@@ -81,6 +84,15 @@ Driver app:
 - Incoming order offer screen.
 - Arrived/start/complete controls.
 - Balance and trip summary.
+- Sends status through `PATCH /drivers/:driverId/status`.
+- Sends location through `PATCH /drivers/:driverId/location` every few seconds while active.
+- Receives `NEW_ORDER` over Socket.IO.
+- Calls accept/arrive/start/complete ride endpoints.
+
+Development auth:
+
+- `POST /auth/dev-login` issues JWTs for local mobile flows until production login is implemented.
+- Socket.IO still requires JWT; mobile apps use the dev-login token during local development.
 
 Done when:
 

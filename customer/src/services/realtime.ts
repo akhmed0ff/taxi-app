@@ -1,7 +1,17 @@
 import { io, Socket } from 'socket.io-client';
-import { Order } from '../types/order';
+import { mapRideToOrder } from './api';
+import { Order, TariffClass } from '../types/order';
 
 const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL ?? 'http://localhost:3000';
+
+type BackendOrderEvent = Partial<Order> & {
+  ride?: unknown;
+  payment?: unknown;
+  rideId?: string;
+  driverId?: string;
+  lat?: number;
+  lng?: number;
+};
 
 export type OrderEventHandler = (payload: Partial<Order>) => void;
 
@@ -17,22 +27,44 @@ export class RealtimeClient {
     return this.socket;
   }
 
-  subscribeToOrder(orderId: string, onEvent: OrderEventHandler) {
+  subscribeToOrder(
+    orderId: string,
+    tariff: TariffClass,
+    onEvent: OrderEventHandler,
+  ) {
     if (!this.socket) {
       return () => undefined;
     }
 
     this.socket.emit('order.join', { orderId });
-    this.socket.on('DRIVER_ACCEPTED', onEvent);
-    this.socket.on('DRIVER_LOCATION', onEvent);
-    this.socket.on('TRIP_STARTED', onEvent);
-    this.socket.on('TRIP_COMPLETED', onEvent);
+
+    const handleRideEvent = (payload: BackendOrderEvent) => {
+      const ride = payload.ride ?? payload;
+      onEvent(mapRideToOrder(ride as Parameters<typeof mapRideToOrder>[0], tariff));
+    };
+    const handleLocation = (payload: BackendOrderEvent) => {
+      if (typeof payload.lat !== 'number' || typeof payload.lng !== 'number') {
+        return;
+      }
+
+      onEvent({
+        driverLocation: {
+          lat: payload.lat,
+          lng: payload.lng,
+        },
+      });
+    };
+
+    this.socket.on('DRIVER_ACCEPTED', handleRideEvent);
+    this.socket.on('DRIVER_LOCATION', handleLocation);
+    this.socket.on('TRIP_STARTED', handleRideEvent);
+    this.socket.on('TRIP_COMPLETED', handleRideEvent);
 
     return () => {
-      this.socket?.off('DRIVER_ACCEPTED', onEvent);
-      this.socket?.off('DRIVER_LOCATION', onEvent);
-      this.socket?.off('TRIP_STARTED', onEvent);
-      this.socket?.off('TRIP_COMPLETED', onEvent);
+      this.socket?.off('DRIVER_ACCEPTED', handleRideEvent);
+      this.socket?.off('DRIVER_LOCATION', handleLocation);
+      this.socket?.off('TRIP_STARTED', handleRideEvent);
+      this.socket?.off('TRIP_COMPLETED', handleRideEvent);
     };
   }
 
