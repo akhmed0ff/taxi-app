@@ -11,6 +11,7 @@
     "redis:up": "docker compose -f ../docker-compose.yml up -d redis",
     "redis:down": "docker compose -f ../docker-compose.yml down",
     "lint": "eslint \"src/**/*.ts\"",
+    "test": "npm run test:core-flow",
     "test:concurrent-accept": "ts-node src/modules/order/order.service.concurrent.spec.ts",
     "test:order-lifecycle": "ts-node src/modules/order/order.service.lifecycle.spec.ts",
     "test:matching": "ts-node src/modules/matching/matching.service.spec.ts",

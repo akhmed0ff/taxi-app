@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert';
+import { BadRequestException } from '@nestjs/common';
 import { UserRoleValue } from '../../common/roles';
 import { DriverStatusValue } from '../driver/driver-status';
 import { PaymentMethodValue } from '../payment/payment-method';
@@ -271,6 +272,11 @@ function createCoreFlowMock() {
 }
 
 async function main() {
+  await testLifecycleCreatesPendingPayment();
+  await testInvalidTransitionFails();
+}
+
+async function testLifecycleCreatesPendingPayment() {
   const { service, state } = createCoreFlowMock();
   const passengerUser = {
     userId: 'passenger-1',
@@ -320,6 +326,35 @@ async function main() {
       OrderStatusValue.IN_PROGRESS,
       OrderStatusValue.COMPLETED,
     ],
+  );
+}
+
+async function testInvalidTransitionFails() {
+  const { service } = createCoreFlowMock();
+  const passengerUser = {
+    userId: 'passenger-1',
+    role: UserRoleValue.PASSENGER,
+  };
+  const driverUser = {
+    userId: 'driver-user-1',
+    role: UserRoleValue.DRIVER,
+  };
+  const createdRide = await service.create({
+    customerId: passengerUser.userId,
+    pickupLat: 41.0167,
+    pickupLng: 70.1436,
+    dropoffLat: 41.03,
+    dropoffLng: 70.16,
+  });
+  await service.accept(createdRide.id, 'driver-1', driverUser);
+
+  await assert.rejects(
+    () => service.startTrip(createdRide.id, driverUser),
+    (error) =>
+      error instanceof BadRequestException &&
+      /Invalid ride status transition: DRIVER_ASSIGNED -> IN_PROGRESS/.test(
+        error.message,
+      ),
   );
 }
 
