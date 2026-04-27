@@ -140,6 +140,7 @@ export class AuthService {
   async issueTokens(user: { id: string; role: UserRole }) {
     const accessToken = await this.jwt.signAsync({
       sub: user.id,
+      userId: user.id,
       role: user.role,
     });
     const refreshToken = randomBytes(48).toString('hex');

@@ -13,6 +13,7 @@ import { PrismaService } from '../db/prisma.service';
 
 interface AccessTokenPayload {
   sub: string;
+  userId?: string;
   role: UserRole;
 }
 
@@ -48,18 +49,19 @@ export class SocketGateway implements OnGatewayConnection {
 
     try {
       const payload = await this.jwt.verifyAsync<AccessTokenPayload>(accessToken);
-      client.data.userId = payload.sub;
+      const userId = payload.userId ?? payload.sub;
+      client.data.userId = userId;
       client.data.role = payload.role;
 
-      void client.join(`user:${payload.sub}`);
+      void client.join(`user:${userId}`);
 
       if (payload.role === UserRoleValue.PASSENGER) {
-        void client.join(`passenger:${payload.sub}`);
+        void client.join(`passenger:${userId}`);
       }
 
       if (payload.role === UserRoleValue.DRIVER) {
         const driver = await this.prisma.driver.findUnique({
-          where: { userId: payload.sub },
+          where: { userId },
           select: { id: true },
         });
 

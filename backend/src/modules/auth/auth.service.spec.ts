@@ -174,7 +174,7 @@ function createAuthMock() {
     },
   };
   const jwt = {
-    signAsync: async (payload: { sub: string; role: string }) => {
+    signAsync: async (payload: { sub: string; userId: string; role: string }) => {
       state.signedTokens.push(payload);
       return `access-${state.signedTokens.length}`;
     },
@@ -211,6 +211,11 @@ async function testRegisterLoginRefreshLogout() {
   });
   assert.ok(loggedIn.accessToken);
   assert.ok(loggedIn.refreshToken);
+  assert.deepEqual(state.signedTokens.at(-1), {
+    sub: registered.user.id,
+    userId: registered.user.id,
+    role: UserRoleValue.PASSENGER,
+  });
 
   await assert.rejects(
     () => service.login({ phone: '+998900001111', password: 'wrong-pass' }),

@@ -9,6 +9,7 @@ import { UserRole } from '../roles';
 
 interface AccessTokenPayload {
   sub: string;
+  userId?: string;
   role: UserRole;
 }
 
@@ -31,8 +32,9 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const payload = await this.jwt.verifyAsync<AccessTokenPayload>(token);
+      const userId = payload.userId ?? payload.sub;
       request.user = {
-        userId: payload.sub,
+        userId,
         role: payload.role,
       };
       return true;
