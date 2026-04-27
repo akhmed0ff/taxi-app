@@ -278,6 +278,27 @@ async function testDevLoginDisabledInProduction() {
   }
 }
 
+async function testDevLoginWorksOutsideProduction() {
+  const { service } = createAuthMock();
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'development';
+
+  try {
+    const result = await service.devLogin({
+      phone: '+998900002222',
+      name: 'Dev',
+      role: UserRoleValue.PASSENGER,
+    });
+
+    assert.equal(result.developmentOnly, true);
+    assert.equal(result.user.phone, '+998900002222');
+    assert.ok(result.accessToken);
+    assert.ok(result.refreshToken);
+  } finally {
+    process.env.NODE_ENV = previousNodeEnv;
+  }
+}
+
 async function testRegisterCreatesDriverProfile() {
   const { service } = createAuthMock();
   const registered = await service.register({
@@ -293,6 +314,7 @@ async function testRegisterCreatesDriverProfile() {
 async function main() {
   await testRegisterLoginRefreshLogout();
   await testRegisterRejectsDuplicatePhone();
+  await testDevLoginWorksOutsideProduction();
   await testDevLoginDisabledInProduction();
   await testRegisterCreatesDriverProfile();
 }

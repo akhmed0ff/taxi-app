@@ -160,6 +160,7 @@ export class AuthService {
   }
 
   async devLogin(dto: DevLoginDto) {
+    // dev-login is intended only for local development and test builds.
     if (process.env.NODE_ENV === 'production') {
       throw new ForbiddenException('dev-login is disabled in production');
     }
