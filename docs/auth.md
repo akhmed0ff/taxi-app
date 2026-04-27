@@ -73,6 +73,14 @@ curl -X POST http://localhost:3000/auth/refresh \
 
 The used refresh token is revoked and a new refresh token is issued.
 
+Refresh token rules:
+
+- the client sends raw `refreshToken`
+- the backend stores only `sha256(refreshToken)` in `RefreshToken.tokenHash`
+- `/auth/refresh` accepts only tokens that exist, are not revoked, and have not expired
+- a successful refresh revokes the used token and returns a new `accessToken` and `refreshToken`
+- a revoked or expired refresh token returns `401 Unauthorized`
+
 Logout:
 
 ```bash
