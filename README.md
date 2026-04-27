@@ -31,6 +31,7 @@ docs/      architecture, deployment and roadmap
 - Socket.IO rooms protected by JWT
 - Customer app creates orders and tracks trip events
 - Driver app goes online/offline, sends location, receives offers and completes trips
+- Mobile UI supports Russian and Uzbek; Russian is the default language
 - Admin panel for monitoring, drivers, tariffs and analytics
 - Health and metrics endpoints: `/health`, `/metrics`
 - Docker and CI/CD baseline

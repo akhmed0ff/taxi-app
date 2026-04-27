@@ -94,6 +94,11 @@ Development auth:
 - `POST /auth/dev-login` issues JWTs for local mobile flows until production login is implemented.
 - Socket.IO still requires JWT; mobile apps use the dev-login token during local development.
 
+Localization:
+
+- Passenger and driver apps support Russian and Uzbek UI dictionaries.
+- Russian is the default language.
+
 Done when:
 
 - Passenger can request a ride from the app.
