@@ -4,6 +4,10 @@ import type { ColumnsType } from 'antd/es/table';
 import { activeOrders, formatSom, statusLabels } from '@/data/mock';
 
 type ActiveOrder = (typeof activeOrders)[number];
+interface ActiveOrdersTableProps {
+  dataSource?: ActiveOrder[];
+  loading?: boolean;
+}
 
 const statusColors: Record<ActiveOrder['status'], string> = {
   SEARCHING_DRIVER: 'gold',
@@ -55,11 +59,15 @@ const columns: ColumnsType<ActiveOrder> = [
   },
 ];
 
-export function ActiveOrdersTable() {
+export function ActiveOrdersTable({
+  dataSource = activeOrders,
+  loading = false,
+}: ActiveOrdersTableProps) {
   return (
     <Table
       columns={columns}
-      dataSource={activeOrders}
+      dataSource={dataSource}
+      loading={loading}
       pagination={false}
       rowKey="id"
       scroll={{ x: 900 }}

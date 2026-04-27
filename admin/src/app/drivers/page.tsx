@@ -1,11 +1,12 @@
 'use client';
 
 import { FileSearchOutlined, LockOutlined, UnlockOutlined } from '@ant-design/icons';
-import { Button, Card, Drawer, Space, Table, Tag, Typography, message } from 'antd';
+import { Alert, Button, Card, Drawer, Space, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
 import { drivers as initialDrivers, formatSom } from '@/data/mock';
+import { fetchAdminDrivers } from '@/services/api';
 
 type Driver = (typeof initialDrivers)[number];
 
@@ -29,8 +30,43 @@ const documentLabels: Record<Driver['documents'], string> = {
 
 export default function DriversPage() {
   const [drivers, setDrivers] = useState(initialDrivers);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>();
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [api, contextHolder] = message.useMessage();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDrivers() {
+      setLoading(true);
+      setError(undefined);
+
+      try {
+        const nextDrivers = await fetchAdminDrivers();
+
+        if (!cancelled) {
+          setDrivers(nextDrivers);
+        }
+      } catch (nextError) {
+        if (!cancelled) {
+          console.warn(nextError);
+          setDrivers(initialDrivers);
+          setError('Backend недоступен. Показаны fallback mock-данные.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadDrivers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const columns = useMemo<ColumnsType<Driver>>(
     () => [
@@ -105,8 +141,16 @@ export default function DriversPage() {
           </Typography.Text>
         </div>
 
+        {error && <Alert message={error} type="warning" showIcon />}
+
         <Card>
-          <Table columns={columns} dataSource={drivers} rowKey="id" scroll={{ x: 1100 }} />
+          <Table
+            columns={columns}
+            dataSource={drivers}
+            loading={loading}
+            rowKey="id"
+            scroll={{ x: 1100 }}
+          />
         </Card>
       </Space>
 

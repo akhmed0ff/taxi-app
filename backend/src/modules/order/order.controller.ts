@@ -24,6 +24,12 @@ export class OrderController {
     });
   }
 
+  @Get('active')
+  @Roles(UserRoleValue.ADMIN)
+  findActive() {
+    return this.orderService.findActive();
+  }
+
   @Get(':rideId')
   @Roles(UserRoleValue.PASSENGER, UserRoleValue.DRIVER, UserRoleValue.ADMIN)
   findOne(@Param('rideId') rideId: string) {

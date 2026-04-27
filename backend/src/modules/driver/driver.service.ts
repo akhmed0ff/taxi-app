@@ -21,6 +21,21 @@ export class DriverService {
     private readonly socket: SocketGateway,
   ) {}
 
+  findAll() {
+    return this.prisma.driver.findMany({
+      include: {
+        user: true,
+        vehicle: true,
+        documents: true,
+        rides: {
+          orderBy: { createdAt: 'desc' },
+          take: 25,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   findOnline() {
     return this.prisma.driver.findMany({
       where: { status: DriverStatusValue.ONLINE },

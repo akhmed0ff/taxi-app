@@ -14,6 +14,12 @@ import { DriverService } from './driver.service';
 export class DriverController {
   constructor(private readonly driverService: DriverService) {}
 
+  @Get()
+  @Roles(UserRoleValue.ADMIN)
+  findAll() {
+    return this.driverService.findAll();
+  }
+
   @Get('online')
   @Roles(UserRoleValue.ADMIN)
   findOnline() {

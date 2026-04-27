@@ -95,6 +95,31 @@ export class OrderService {
     return ride;
   }
 
+  findActive() {
+    return this.prisma.ride.findMany({
+      where: {
+        status: {
+          in: [
+            OrderStatusValue.SEARCHING_DRIVER,
+            OrderStatusValue.DRIVER_ASSIGNED,
+            OrderStatusValue.DRIVER_ARRIVED,
+            OrderStatusValue.IN_PROGRESS,
+          ],
+        },
+      },
+      include: {
+        customer: true,
+        driver: {
+          include: {
+            user: true,
+            vehicle: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async accept(rideId: string, driverId: string, user?: AuthUser) {
     await this.assertDriverActor(driverId, user);
 

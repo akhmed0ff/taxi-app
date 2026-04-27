@@ -2,14 +2,27 @@ import { CarFilled, EnvironmentFilled } from '@ant-design/icons';
 import { Card, Space, Tag, Typography } from 'antd';
 import { activeOrders, drivers, statusLabels } from '@/data/mock';
 
-export function OrdersMap() {
+interface OrdersMapProps {
+  orders?: typeof activeOrders;
+  driverList?: typeof drivers;
+  loading?: boolean;
+}
+
+export function OrdersMap({
+  orders = activeOrders,
+  driverList = drivers,
+  loading = false,
+}: OrdersMapProps) {
   return (
     <Card
+      loading={loading}
       title="Карта заказов"
       extra={
         <Space size={8} wrap>
-          <Tag color="blue">Водители: {drivers.filter((driver) => driver.status !== 'OFFLINE').length}</Tag>
-          <Tag color="gold">Заказы: {activeOrders.length}</Tag>
+          <Tag color="blue">
+            Водители: {driverList.filter((driver) => driver.status !== 'OFFLINE').length}
+          </Tag>
+          <Tag color="gold">Заказы: {orders.length}</Tag>
         </Space>
       }
     >
@@ -20,7 +33,7 @@ export function OrdersMap() {
         <Typography.Text strong className="map-label">
           Ангрен, live
         </Typography.Text>
-        {drivers.map((driver) => (
+        {driverList.map((driver) => (
           <div
             className={`map-marker driver-marker ${driver.status.toLowerCase()}`}
             key={driver.id}
@@ -30,7 +43,7 @@ export function OrdersMap() {
             <CarFilled />
           </div>
         ))}
-        {activeOrders.map((order) => (
+        {orders.map((order) => (
           <div
             className="map-marker order-marker"
             key={order.id}
