@@ -1,9 +1,10 @@
-import type { activeOrders, drivers } from '@/data/mock';
+import type { activeOrders, drivers, tariffs } from '@/data/mock';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 type AdminDriver = (typeof drivers)[number];
 type AdminOrder = (typeof activeOrders)[number];
+type AdminTariff = (typeof tariffs)[number];
 
 interface BackendUser {
   id: string;
@@ -46,6 +47,17 @@ interface BackendRide {
   driver?: BackendDriver & { user?: BackendUser };
 }
 
+interface BackendTariff {
+  id: string;
+  city: string;
+  baseFare: number;
+  perKm: number;
+  perMinute: number;
+  surgeMultiplier: number;
+  minimumFare: number;
+  active: boolean;
+}
+
 let adminAccessToken: string | undefined;
 
 export async function fetchAdminDrivers() {
@@ -58,11 +70,36 @@ export async function fetchActiveOrders() {
   return data.map(mapBackendRide);
 }
 
-async function apiFetch<T>(path: string): Promise<T> {
+export async function fetchTariffs() {
+  const data = await apiFetch<BackendTariff[]>('/admin/tariffs');
+  return data.map(mapBackendTariff);
+}
+
+export async function saveTariff(tariff: AdminTariff) {
+  const data = await apiFetch<BackendTariff>(`/admin/tariffs/${tariff.key}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      city: tariff.name,
+      baseFare: tariff.baseFare,
+      perKm: tariff.perKm,
+      perMinute: tariff.perMinute,
+      surgeMultiplier: tariff.surge,
+      minimumFare: tariff.baseFare,
+      active: tariff.active,
+    }),
+  });
+
+  return mapBackendTariff(data);
+}
+
+async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const accessToken = await getAdminAccessToken();
   const response = await fetch(`${API_URL}${path}`, {
+    ...init,
     headers: {
+      'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
+      ...init.headers,
     },
   });
 
@@ -78,21 +115,43 @@ async function getAdminAccessToken() {
     return adminAccessToken;
   }
 
-  const response = await fetch(`${API_URL}/auth/dev-login`, {
+  const phone = process.env.NEXT_PUBLIC_ADMIN_PHONE ?? '+998900000001';
+  const password = process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? 'password123';
+  const registerResponse = await fetch(`${API_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      phone: process.env.NEXT_PUBLIC_ADMIN_PHONE ?? '+998900000001',
+      phone,
+      password,
       name: 'Admin Dispatcher',
       role: 'ADMIN',
     }),
   });
 
-  if (!response.ok) {
-    throw new Error(await readError(response, 'Admin dev-login failed'));
+  if (registerResponse.ok) {
+    const data = await registerResponse.json();
+    adminAccessToken = data.accessToken;
+    return adminAccessToken;
   }
 
-  const data = await response.json();
+  if (registerResponse.status !== 409) {
+    throw new Error(await readError(registerResponse, 'Admin register failed'));
+  }
+
+  const loginResponse = await fetch(`${API_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      phone,
+      password,
+    }),
+  });
+
+  if (!loginResponse.ok) {
+    throw new Error(await readError(loginResponse, 'Admin login failed'));
+  }
+
+  const data = await loginResponse.json();
   adminAccessToken = data.accessToken;
   return adminAccessToken;
 }
@@ -138,6 +197,18 @@ function mapBackendRide(ride: BackendRide): AdminOrder {
     pickup,
     destination,
     ...stableMapPosition(ride.id),
+  };
+}
+
+function mapBackendTariff(tariff: BackendTariff): AdminTariff {
+  return {
+    key: tariff.id,
+    name: tariff.city,
+    baseFare: tariff.baseFare,
+    perKm: tariff.perKm,
+    perMinute: tariff.perMinute,
+    surge: tariff.surgeMultiplier,
+    active: tariff.active,
   };
 }
 
