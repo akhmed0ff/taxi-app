@@ -52,7 +52,7 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
       - run: npx prisma migrate deploy
-      - run: npm run test:concurrent-accept
+      - run: npm run test:core-flow
       - run: npm run build
 
   admin:
