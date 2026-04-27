@@ -1,44 +1,44 @@
 # ANGREN TAXI
 
-ANGREN TAXI is a taxi platform monorepo for Angren. It includes a NestJS backend, passenger and driver Expo apps, an admin dispatcher panel and deployment infrastructure.
+ANGREN TAXI - монорепозиторий платформы такси для города Ангрен. В проект входят backend на NestJS, мобильные приложения пассажира и водителя на Expo, админ-панель диспетчера и инфраструктура для деплоя.
 
-## Stack
+## Стек
 
 - Backend: NestJS, Prisma, PostgreSQL, Redis, Socket.IO, BullMQ
-- Customer app: Expo, React Native, socket.io-client
-- Driver app: Expo, React Native, expo-location, socket.io-client
-- Admin: Next.js, Ant Design
-- Infrastructure: Docker Compose, GitHub Actions CI/CD
+- Приложение пассажира: Expo, React Native, socket.io-client
+- Приложение водителя: Expo, React Native, expo-location, socket.io-client
+- Админ-панель: Next.js, Ant Design
+- Инфраструктура: Docker Compose, GitHub Actions CI/CD
 
-## Structure
+## Структура
 
 ```text
-backend/   NestJS API, order lifecycle, matching, realtime, payments
-customer/  passenger mobile app
-driver/    driver mobile app
-admin/     dispatcher/admin panel
-web/       browser client placeholder
-docs/      architecture, deployment and roadmap
+backend/   NestJS API, жизненный цикл заказа, matching, realtime, оплаты
+customer/  мобильное приложение пассажира
+driver/    мобильное приложение водителя
+admin/     админ-панель и диспетчерская
+web/       заготовка веб-клиента
+docs/      архитектура, деплой и roadmap
 ```
 
-## Current Features
+## Текущее состояние
 
-- Dev auth endpoint with JWT tokens: `POST /auth/dev-login`
-- Order lifecycle: create, accept, arrive, start, complete, pay
-- Dedicated `MatchingModule`
-- Redis GEO driver search
-- Driver status rules: `ONLINE`, `BUSY`, `OFFLINE`, `BLOCKED`
-- Socket.IO rooms protected by JWT
-- Customer app creates orders and tracks trip events
-- Driver app goes online/offline, sends location, receives offers and completes trips
-- Mobile UI supports Russian and Uzbek; Russian is the default language
-- Admin panel for monitoring, drivers, tariffs and analytics
-- Health and metrics endpoints: `/health`, `/metrics`
-- Docker and CI/CD baseline
+- Dev-auth endpoint с JWT токенами: `POST /auth/dev-login`
+- Жизненный цикл заказа: создать, принять, приехать, начать, завершить, оплатить
+- Отдельный `MatchingModule`
+- Поиск водителей через Redis GEO
+- Правила статусов водителя: `ONLINE`, `BUSY`, `OFFLINE`, `BLOCKED`
+- Socket.IO комнаты защищены JWT
+- Customer app создает заказы и отслеживает события поездки
+- Driver app выходит онлайн/оффлайн, отправляет геолокацию, получает офферы и завершает поездки
+- Мобильный UI поддерживает русский и узбекский языки; по умолчанию русский
+- Админ-панель для мониторинга, водителей, тарифов и аналитики
+- Health и metrics endpoints: `/health`, `/metrics`
+- Базовая Docker и CI/CD инфраструктура
 
-## Quick Start
+## Быстрый старт
 
-Install dependencies per app:
+Установить зависимости по приложениям:
 
 ```bash
 cd backend
@@ -54,13 +54,13 @@ cd ../driver
 npm install
 ```
 
-Start infrastructure if Docker is available:
+Запустить инфраструктуру, если доступен Docker:
 
 ```bash
 docker compose up -d postgres redis
 ```
 
-Run backend:
+Запустить backend:
 
 ```bash
 cd backend
@@ -69,14 +69,14 @@ npm run prisma:migrate
 npm run start:dev
 ```
 
-Run admin:
+Запустить админ-панель:
 
 ```bash
 cd admin
 npm run dev
 ```
 
-Run mobile apps:
+Запустить мобильные приложения:
 
 ```bash
 cd customer
@@ -86,36 +86,36 @@ cd ../driver
 npm run start
 ```
 
-Default URLs:
+Адреса по умолчанию:
 
 - Backend: `http://localhost:3000`
 - Admin: `http://localhost:3001`
 - Postgres: `localhost:5432`
 - Redis: `localhost:6379`
 
-## Core Flow
+## Основной сценарий
 
-1. Passenger logs in through dev auth and receives JWT.
-2. Passenger creates an order with `POST /orders`.
-3. Backend estimates fare and queues `find-driver`.
-4. `MatchingModule` searches nearby `ONLINE` drivers in Redis GEO.
-5. Driver receives `NEW_ORDER` over Socket.IO.
-6. Driver accepts, arrives, starts and completes the trip.
-7. Driver location is sent every few seconds while active.
-8. Passenger receives realtime trip events.
-9. Completion creates a pending payment; payment can be marked paid.
+1. Пассажир входит через dev-auth и получает JWT.
+2. Пассажир создает заказ через `POST /orders`.
+3. Backend считает примерную стоимость и ставит задачу `find-driver` в очередь.
+4. `MatchingModule` ищет ближайших `ONLINE` водителей через Redis GEO.
+5. Водитель получает `NEW_ORDER` через Socket.IO.
+6. Водитель принимает заказ, приезжает, начинает и завершает поездку.
+7. Геолокация водителя отправляется каждые несколько секунд, пока он активен.
+8. Пассажир получает realtime-события поездки.
+9. После завершения создается pending payment; оплату можно отметить как paid.
 
 ## Realtime Security
 
-Socket.IO clients must send:
+Socket.IO клиенты должны отправлять:
 
 ```ts
 auth: { accessToken }
 ```
 
-The gateway verifies JWT before joining rooms. Room IDs are derived from the token and database state, not from client-provided `driverId` or `passengerId`.
+Gateway проверяет JWT до подключения к комнатам. ID комнат берутся из токена и состояния в базе, а не из клиентских `driverId` или `passengerId`.
 
-## Useful Commands
+## Полезные команды
 
 Backend:
 
@@ -150,15 +150,15 @@ Docker:
 docker compose up -d --build
 ```
 
-## Documentation
+## Документация
 
-- Architecture: [docs/architecture.md](docs/architecture.md)
+- Архитектура: [docs/architecture.md](docs/architecture.md)
 - Roadmap: [docs/roadmap.md](docs/roadmap.md)
-- Deployment: [docs/deployment.md](docs/deployment.md)
+- Деплой: [docs/deployment.md](docs/deployment.md)
 
 ## CI/CD
 
-GitHub Actions runs backend build, admin typecheck/build and Docker image build. VPS deploy is skipped unless these GitHub secrets are configured:
+GitHub Actions запускает сборку backend, typecheck/build админ-панели и сборку Docker images. VPS deploy пропускается, пока не настроены GitHub Secrets:
 
 - `VPS_HOST`
 - `VPS_USER`
