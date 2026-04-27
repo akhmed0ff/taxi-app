@@ -30,6 +30,7 @@ export default function App() {
   const [earnedToday, setEarnedToday] = useState(0);
 
   useDriverLocationTracking({
+    accessToken: session?.accessToken,
     driverId: session?.driverId,
     enabled: Boolean(session?.driverId) && status !== 'OFFLINE',
   });
@@ -62,7 +63,7 @@ export default function App() {
 
     const nextStatus = status === 'OFFLINE' ? 'ONLINE' : 'OFFLINE';
     setStatus(nextStatus);
-    await updateDriverStatus(session.driverId, nextStatus);
+    await updateDriverStatus(session.accessToken, session.driverId, nextStatus);
   }
 
   async function handleAcceptOffer() {
@@ -71,7 +72,7 @@ export default function App() {
     }
 
     const acceptedOffer = offer;
-    await acceptOrder(acceptedOffer.id, session.driverId);
+    await acceptOrder(session.accessToken, acceptedOffer.id, session.driverId);
     setStatus('BUSY');
     setTrip({ ...acceptedOffer, status: 'ACCEPTED' });
     setScreen('navigation');
@@ -96,7 +97,8 @@ export default function App() {
       {screen === 'navigation' && trip && (
         <NavigationScreen
           onArrived={async () => {
-            await markArrived(trip.id);
+            if (!session) return;
+            await markArrived(session.accessToken, trip.id);
             setTrip({ ...trip, status: 'DRIVER_ARRIVED' });
             setScreen('trip');
           }}
@@ -106,14 +108,16 @@ export default function App() {
       {screen === 'trip' && trip && (
         <TripScreen
           onComplete={async () => {
-            await completeTrip(trip.id);
+            if (!session) return;
+            await completeTrip(session.accessToken, trip.id);
             setEarnedToday((value) => value + trip.price);
             setTrip({ ...trip, status: 'COMPLETED' });
             setStatus('ONLINE');
             setScreen('balance');
           }}
           onStart={async () => {
-            await startTrip(trip.id);
+            if (!session) return;
+            await startTrip(session.accessToken, trip.id);
             setTrip({ ...trip, status: 'IN_PROGRESS' });
           }}
           trip={trip}

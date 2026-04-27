@@ -1,7 +1,14 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Queue } from 'bullmq';
+import { AuthUser } from '../../common/auth/auth-user';
 import { RealtimeEvent } from '../../common/realtime-events';
+import { UserRoleValue } from '../../common/roles';
 import { PrismaService } from '../../infrastructure/db/prisma.service';
 import { RedisService } from '../../infrastructure/redis/redis.service';
 import { SocketGateway } from '../../infrastructure/socket/socket.gateway';
@@ -88,27 +95,52 @@ export class OrderService {
     return ride;
   }
 
-  async accept(rideId: string, driverId: string) {
-    const driver = await this.prisma.driver.findUnique({
-      where: { id: driverId },
-      select: { status: true },
-    });
+  async accept(rideId: string, driverId: string, user?: AuthUser) {
+    await this.assertDriverActor(driverId, user);
 
-    if (!driver) {
-      throw new NotFoundException('Driver not found');
-    }
+    const ride = await this.prisma.$transaction(async (tx) => {
+      const driverUpdate = await tx.driver.updateMany({
+        where: {
+          id: driverId,
+          status: DriverStatusValue.ONLINE,
+        },
+        data: { status: DriverStatusValue.BUSY },
+      });
 
-    if (driver.status !== DriverStatusValue.ONLINE) {
-      throw new BadRequestException('Only ONLINE drivers can accept new rides');
-    }
+      if (driverUpdate.count !== 1) {
+        throw new BadRequestException('Only ONLINE drivers can accept new rides');
+      }
 
-    const ride = await this.transitionRide(rideId, OrderStatusValue.DRIVER_ASSIGNED, {
-      driverId,
-    });
+      const rideUpdate = await tx.ride.updateMany({
+        where: {
+          id: rideId,
+          driverId: null,
+          status: OrderStatusValue.SEARCHING_DRIVER,
+        },
+        data: {
+          driverId,
+          status: OrderStatusValue.DRIVER_ASSIGNED,
+        },
+      });
 
-    await this.prisma.driver.update({
-      where: { id: driverId },
-      data: { status: DriverStatusValue.BUSY },
+      if (rideUpdate.count !== 1) {
+        throw new BadRequestException('Ride is not available for acceptance');
+      }
+
+      await tx.rideStatusHistory.create({
+        data: {
+          rideId,
+          status: OrderStatusValue.DRIVER_ASSIGNED,
+        },
+      });
+
+      const assignedRide = await tx.ride.findUnique({ where: { id: rideId } });
+
+      if (!assignedRide) {
+        throw new NotFoundException('Ride not found');
+      }
+
+      return assignedRide;
     });
 
     this.socket.emitToDriver(driverId, RealtimeEvent.DRIVER_ACCEPTED, ride);
@@ -118,14 +150,16 @@ export class OrderService {
     return ride;
   }
 
-  async markDriverArrived(rideId: string) {
+  async markDriverArrived(rideId: string, user?: AuthUser) {
+    await this.assertRideDriverAccess(rideId, user);
     const ride = await this.transitionRide(rideId, OrderStatusValue.DRIVER_ARRIVED);
 
     this.socket.emitToOrder(ride.id, RealtimeEvent.DRIVER_ACCEPTED, ride);
     return ride;
   }
 
-  async startTrip(rideId: string) {
+  async startTrip(rideId: string, user?: AuthUser) {
+    await this.assertRideDriverAccess(rideId, user);
     const ride = await this.transitionRide(rideId, OrderStatusValue.IN_PROGRESS);
 
     this.socket.emitToOrder(ride.id, RealtimeEvent.TRIP_STARTED, ride);
@@ -135,7 +169,9 @@ export class OrderService {
   async completeTrip(
     rideId: string,
     paymentMethod: PaymentMethod = PaymentMethodValue.CASH,
+    user?: AuthUser,
   ) {
+    await this.assertRideDriverAccess(rideId, user);
     const currentRide = await this.findOne(rideId);
     const finalFare = currentRide.finalFare ?? currentRide.estimatedFare ?? 0;
 
@@ -164,8 +200,15 @@ export class OrderService {
     return payload;
   }
 
-  async pay(rideId: string) {
+  async pay(rideId: string, user?: AuthUser) {
     const ride = await this.findOne(rideId);
+
+    if (
+      user?.role === UserRoleValue.PASSENGER &&
+      ride.customerId !== user.userId
+    ) {
+      throw new ForbiddenException('Cannot pay another passenger ride');
+    }
 
     if (ride.status !== OrderStatusValue.COMPLETED) {
       throw new BadRequestException('Ride must be completed before payment');
@@ -210,6 +253,44 @@ export class OrderService {
       throw new BadRequestException(
         `Invalid ride status transition: ${currentStatus} -> ${nextStatus}`,
       );
+    }
+  }
+
+  private async assertDriverActor(driverId: string, user?: AuthUser) {
+    if (!user || user.role === UserRoleValue.ADMIN) {
+      return;
+    }
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { userId: true },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    if (driver.userId !== user.userId) {
+      throw new ForbiddenException('Cannot accept ride for another driver');
+    }
+  }
+
+  private async assertRideDriverAccess(rideId: string, user?: AuthUser) {
+    if (!user || user.role === UserRoleValue.ADMIN) {
+      return;
+    }
+
+    const ride = await this.prisma.ride.findUnique({
+      where: { id: rideId },
+      select: { driver: { select: { userId: true } } },
+    });
+
+    if (!ride) {
+      throw new NotFoundException('Ride not found');
+    }
+
+    if (ride.driver?.userId !== user.userId) {
+      throw new ForbiddenException('Cannot mutate another driver ride');
     }
   }
 

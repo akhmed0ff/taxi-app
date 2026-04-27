@@ -8,6 +8,7 @@ export interface CustomerSession {
 }
 
 export interface CreateOrderInput {
+  accessToken: string;
   customerId: string;
   pickup: Point;
   dropoff: Point;
@@ -54,7 +55,10 @@ export async function loginPassenger(phone: string): Promise<CustomerSession> {
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
   const response = await fetch(`${API_URL}/orders`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${input.accessToken}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({
       customerId: input.customerId,
       pickupLat: input.pickup.lat,

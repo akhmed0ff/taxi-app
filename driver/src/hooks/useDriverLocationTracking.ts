@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { updateDriverLocation } from '../services/api';
 
 interface UseDriverLocationTrackingInput {
+  accessToken?: string;
   driverId?: string;
   enabled: boolean;
   intervalMs?: number;
@@ -10,11 +11,12 @@ interface UseDriverLocationTrackingInput {
 
 export function useDriverLocationTracking({
   driverId,
+  accessToken,
   enabled,
   intervalMs = 2500,
 }: UseDriverLocationTrackingInput) {
   useEffect(() => {
-    if (!enabled || !driverId) {
+    if (!enabled || !driverId || !accessToken) {
       return;
     }
 
@@ -34,6 +36,7 @@ export function useDriverLocationTracking({
       }
 
       await updateDriverLocation(
+        accessToken,
         driverId,
         location.coords.latitude,
         location.coords.longitude,
@@ -49,5 +52,5 @@ export function useDriverLocationTracking({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [driverId, enabled, intervalMs]);
+  }, [accessToken, driverId, enabled, intervalMs]);
 }

@@ -11,6 +11,7 @@
     "redis:up": "docker compose -f ../docker-compose.yml up -d redis",
     "redis:down": "docker compose -f ../docker-compose.yml down",
     "lint": "eslint \"src/**/*.ts\"",
+    "test:concurrent-accept": "ts-node src/modules/order/order.service.concurrent.spec.ts",
     "format": "prettier --write \"src/**/*.ts\" \"prisma/**/*.prisma\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

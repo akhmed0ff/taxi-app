@@ -76,6 +76,7 @@ export default function App() {
 
     try {
       const createdOrder = await createOrder({
+        accessToken: session.accessToken,
         customerId: session.customerId,
         pickup,
         dropoff,

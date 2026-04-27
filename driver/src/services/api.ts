@@ -31,12 +31,16 @@ export async function loginDriver(): Promise<DriverSession> {
 }
 
 export async function updateDriverStatus(
+  accessToken: string,
   driverId: string,
   status: DriverStatus,
 ) {
   const response = await fetch(`${API_URL}/drivers/${driverId}/status`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ status }),
   });
 
@@ -48,13 +52,17 @@ export async function updateDriverStatus(
 }
 
 export async function updateDriverLocation(
+  accessToken: string,
   driverId: string,
   lat: number,
   lng: number,
 ) {
   const response = await fetch(`${API_URL}/drivers/${driverId}/location`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ lat, lng }),
   });
 
@@ -65,9 +73,14 @@ export async function updateDriverLocation(
   return response.json();
 }
 
-export async function acceptOrder(orderId: string, driverId: string) {
+export async function acceptOrder(
+  accessToken: string,
+  orderId: string,
+  driverId: string,
+) {
   const response = await fetch(`${API_URL}/orders/${orderId}/accept/${driverId}`, {
     method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (!response.ok) {
@@ -77,9 +90,10 @@ export async function acceptOrder(orderId: string, driverId: string) {
   return response.json();
 }
 
-export async function markArrived(orderId: string) {
+export async function markArrived(accessToken: string, orderId: string) {
   const response = await fetch(`${API_URL}/orders/${orderId}/arrive`, {
     method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (!response.ok) {
@@ -89,9 +103,10 @@ export async function markArrived(orderId: string) {
   return response.json();
 }
 
-export async function startTrip(orderId: string) {
+export async function startTrip(accessToken: string, orderId: string) {
   const response = await fetch(`${API_URL}/orders/${orderId}/start`, {
     method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (!response.ok) {
@@ -101,10 +116,13 @@ export async function startTrip(orderId: string) {
   return response.json();
 }
 
-export async function completeTrip(orderId: string) {
+export async function completeTrip(accessToken: string, orderId: string) {
   const response = await fetch(`${API_URL}/orders/${orderId}/complete`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ paymentMethod: 'CASH' }),
   });
 

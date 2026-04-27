@@ -24,6 +24,7 @@ docs/      архитектура, деплой и roadmap
 ## Текущее состояние
 
 - Dev-auth endpoint с JWT токенами: `POST /auth/dev-login`
+- JWT AuthGuard и RoleGuard для HTTP endpoints
 - Жизненный цикл заказа: создать, принять, приехать, начать, завершить, оплатить
 - Отдельный `MatchingModule`
 - Поиск водителей через Redis GEO
@@ -121,6 +122,7 @@ Backend:
 
 ```bash
 cd backend
+npm run test:concurrent-accept
 npm run build
 npm run start:dev
 ```
