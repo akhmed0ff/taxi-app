@@ -10,9 +10,9 @@ interface FindDriverJob {
   attempt?: number;
 }
 
-const OFFER_TTL_SECONDS = 25;
-const MAX_MATCHING_ATTEMPTS = 4;
-const BASE_RADIUS_KM = 3;
+export const OFFER_TIMEOUT_MS = 10_000;
+export const INITIAL_RADIUS_KM = 3;
+export const MAX_RADIUS_KM = 12;
 const RADIUS_STEP_KM = 3;
 
 @Injectable()
@@ -33,21 +33,35 @@ export class MatchingProcessor extends WorkerHost {
     }
 
     const attempt = job.data.attempt ?? 1;
-    const radiusKm = BASE_RADIUS_KM + (attempt - 1) * RADIUS_STEP_KM;
+    const radiusKm = Math.min(
+      INITIAL_RADIUS_KM + (attempt - 1) * RADIUS_STEP_KM,
+      MAX_RADIUS_KM,
+    );
+
+    this.logger.log(
+      `Matching ride ${job.data.rideId}: attempt=${attempt}, radius=${radiusKm}km, offerTimeout=${OFFER_TIMEOUT_MS}ms`,
+    );
+
     const result = await this.matchingService.offerRideToNearbyDrivers({
       rideId: job.data.rideId,
       pickupLat: job.data.pickupLat,
       pickupLng: job.data.pickupLng,
       radiusKm,
-      offerTtlSeconds: OFFER_TTL_SECONDS,
+      offerTimeoutMs: OFFER_TIMEOUT_MS,
     });
 
     if (!result.shouldContinueSearch) {
+      this.logger.log(
+        `Matching ride ${job.data.rideId}: stopped because ride is no longer searching`,
+      );
       return result;
     }
 
-    if (attempt >= MAX_MATCHING_ATTEMPTS) {
+    if (radiusKm >= MAX_RADIUS_KM) {
       await this.matchingService.cancelNoDriverRide(job.data.rideId);
+      this.logger.warn(
+        `Matching ride ${job.data.rideId}: no driver accepted before max radius ${MAX_RADIUS_KM}km`,
+      );
       return {
         ...result,
         attempt,
@@ -63,21 +77,21 @@ export class MatchingProcessor extends WorkerHost {
         attempt: attempt + 1,
       },
       {
-        delay: OFFER_TTL_SECONDS * 1000,
+        delay: OFFER_TIMEOUT_MS,
         removeOnComplete: true,
         removeOnFail: 1000,
       },
     );
 
     this.logger.log(
-      `Scheduled next matching attempt ${attempt + 1} for ride ${job.data.rideId}`,
+      `Matching ride ${job.data.rideId}: scheduled attempt ${attempt + 1} after ${OFFER_TIMEOUT_MS}ms`,
     );
 
     return {
       ...result,
       attempt,
       radiusKm,
-      nextAttemptInSeconds: OFFER_TTL_SECONDS,
+      nextAttemptInMs: OFFER_TIMEOUT_MS,
     };
   }
 }

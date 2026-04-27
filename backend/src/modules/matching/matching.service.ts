@@ -11,7 +11,7 @@ export interface MatchRideInput {
   pickupLat: number;
   pickupLng: number;
   radiusKm: number;
-  offerTtlSeconds: number;
+  offerTimeoutMs: number;
 }
 
 @Injectable()
@@ -30,8 +30,15 @@ export class MatchingService {
     });
 
     if (!ride || ride.status !== OrderStatusValue.SEARCHING_DRIVER) {
+      this.logger.log(
+        `Matching ride ${input.rideId}: skipped, ride status is ${ride?.status ?? 'missing'}`,
+      );
       return { ride, offeredDrivers: 0, shouldContinueSearch: false };
     }
+
+    this.logger.log(
+      `Matching ride ${ride.id}: searching Redis GEO within ${input.radiusKm}km`,
+    );
 
     const nearbyDrivers = await this.geo.findNearbyDrivers(
       input.pickupLat,
@@ -39,17 +46,18 @@ export class MatchingService {
       input.radiusKm,
     );
     const onlineDrivers = await this.filterOnlineDrivers(nearbyDrivers);
+    const expiresInSeconds = Math.ceil(input.offerTimeoutMs / 1000);
 
     for (const driver of onlineDrivers) {
       this.socket.emitToDriver(driver.driverId, RealtimeEvent.NEW_ORDER, {
         ride,
         distanceMeters: driver.distanceMeters,
-        expiresInSeconds: input.offerTtlSeconds,
+        expiresInSeconds,
       });
     }
 
     this.logger.log(
-      `Offered ride ${ride.id} to ${onlineDrivers.length} online drivers within ${input.radiusKm}km`,
+      `Matching ride ${ride.id}: found ${nearbyDrivers.length} nearby drivers, offered ${onlineDrivers.length} ONLINE drivers, expiresIn=${expiresInSeconds}s`,
     );
 
     return {
@@ -75,11 +83,15 @@ export class MatchingService {
         statusHistory: {
           create: {
             status: OrderStatusValue.CANCELLED,
-            reason: 'NO_DRIVERS_AVAILABLE',
+            reason: 'NO_DRIVER_FOUND',
           },
         },
       },
     });
+
+    this.logger.warn(
+      `Matching ride ${cancelledRide.id}: cancelled with reason NO_DRIVER_FOUND`,
+    );
 
     this.socket.emitToPassenger(
       cancelledRide.customerId,

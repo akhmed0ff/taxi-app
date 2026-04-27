@@ -2,7 +2,12 @@ import { strict as assert } from 'node:assert';
 import { RealtimeEvent } from '../../common/realtime-events';
 import { DriverStatusValue } from '../driver/driver-status';
 import { OrderStatusValue } from '../order/order-status';
-import { MatchingProcessor } from './matching.processor';
+import {
+  INITIAL_RADIUS_KM,
+  MAX_RADIUS_KM,
+  OFFER_TIMEOUT_MS,
+  MatchingProcessor,
+} from './matching.processor';
 import { MatchingService } from './matching.service';
 
 function createMatchingMock() {
@@ -17,6 +22,8 @@ function createMatchingMock() {
     drivers: [
       { id: 'driver-online', status: DriverStatusValue.ONLINE },
       { id: 'driver-busy', status: DriverStatusValue.BUSY },
+      { id: 'driver-offline', status: DriverStatusValue.OFFLINE },
+      { id: 'driver-blocked', status: DriverStatusValue.BLOCKED },
     ],
     emitted: [] as Array<{ driverId: string; event: string; payload: unknown }>,
   };
@@ -51,6 +58,8 @@ function createMatchingMock() {
     findNearbyDrivers: async () => [
       { driverId: 'driver-online', distanceMeters: 240 },
       { driverId: 'driver-busy', distanceMeters: 160 },
+      { driverId: 'driver-offline', distanceMeters: 180 },
+      { driverId: 'driver-blocked', distanceMeters: 220 },
     ],
   };
   const socket = {
@@ -76,14 +85,18 @@ async function testOnlyOnlineDriversReceiveOffers() {
     rideId: 'ride-1',
     pickupLat: 41.0167,
     pickupLng: 70.1436,
-    radiusKm: 3,
-    offerTtlSeconds: 25,
+    radiusKm: INITIAL_RADIUS_KM,
+    offerTimeoutMs: OFFER_TIMEOUT_MS,
   });
 
   assert.equal(result.offeredDrivers, 1);
   assert.equal(state.emitted.length, 1);
   assert.equal(state.emitted[0].driverId, 'driver-online');
   assert.equal(state.emitted[0].event, RealtimeEvent.NEW_ORDER);
+  assert.equal(
+    (state.emitted[0].payload as { expiresInSeconds: number }).expiresInSeconds,
+    10,
+  );
 }
 
 async function testOfferTimeoutSchedulesNextSearchAttempt() {
@@ -125,7 +138,7 @@ async function testOfferTimeoutSchedulesNextSearchAttempt() {
   assert.equal(scheduledJobs.length, 1);
   assert.equal(scheduledJobs[0].name, 'find-driver');
   assert.equal(scheduledJobs[0].data.attempt, 2);
-  assert.equal(scheduledJobs[0].options.delay, 25000);
+  assert.equal(scheduledJobs[0].options.delay, OFFER_TIMEOUT_MS);
 }
 
 async function testNoDriverAfterMaxAttemptsCancelsRide() {
@@ -151,7 +164,7 @@ async function testNoDriverAfterMaxAttemptsCancelsRide() {
       rideId: 'ride-1',
       pickupLat: 41.0167,
       pickupLng: 70.1436,
-      attempt: 4,
+      attempt: Math.ceil((MAX_RADIUS_KM - INITIAL_RADIUS_KM) / 3) + 1,
     },
   } as never);
 
