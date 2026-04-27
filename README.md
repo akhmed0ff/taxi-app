@@ -1,81 +1,165 @@
 # ANGREN TAXI
 
-Monorepo structure for the ANGREN TAXI platform.
+ANGREN TAXI is a taxi platform monorepo for Angren. It includes a NestJS backend, passenger and driver Expo apps, an admin dispatcher panel and deployment infrastructure.
 
-## Folders
+## Stack
 
-- `backend` - NestJS API, PostgreSQL, Redis, Socket.IO, BullMQ
-- `customer` - passenger mobile app, React Native Expo
-- `driver` - driver mobile app, React Native Expo
-- `admin` - admin panel
-- `web` - browser version of the app
-- `docs` - architecture notes and project decisions
+- Backend: NestJS, Prisma, PostgreSQL, Redis, Socket.IO, BullMQ
+- Customer app: Expo, React Native, socket.io-client
+- Driver app: Expo, React Native, expo-location, socket.io-client
+- Admin: Next.js, Ant Design
+- Infrastructure: Docker Compose, GitHub Actions CI/CD
 
-## System Model
+## Structure
 
-The aggregator has five subsystems:
+```text
+backend/   NestJS API, order lifecycle, matching, realtime, payments
+customer/  passenger mobile app
+driver/    driver mobile app
+admin/     dispatcher/admin panel
+web/       browser client placeholder
+docs/      architecture, deployment and roadmap
+```
 
-- Backend
-- Mobile passenger app
-- Mobile driver app
-- Admin / dispatcher panel
-- Web client version
+## Current Features
 
-They communicate through HTTP API, WebSocket realtime events and Queue background jobs.
+- Dev auth endpoint with JWT tokens: `POST /auth/dev-login`
+- Order lifecycle: create, accept, arrive, start, complete, pay
+- Dedicated `MatchingModule`
+- Redis GEO driver search
+- Driver status rules: `ONLINE`, `BUSY`, `OFFLINE`, `BLOCKED`
+- Socket.IO rooms protected by JWT
+- Customer app creates orders and tracks trip events
+- Driver app goes online/offline, sends location, receives offers and completes trips
+- Admin panel for monitoring, drivers, tariffs and analytics
+- Health and metrics endpoints: `/health`, `/metrics`
+- Docker and CI/CD baseline
 
-See [docs/architecture.md](docs/architecture.md).
+## Quick Start
 
-Development order is documented in [docs/roadmap.md](docs/roadmap.md).
-
-## Backend
+Install dependencies per app:
 
 ```bash
 cd backend
 npm install
+
+cd ../admin
+npm install
+
+cd ../customer
+npm install
+
+cd ../driver
+npm install
+```
+
+Start infrastructure if Docker is available:
+
+```bash
+docker compose up -d postgres redis
+```
+
+Run backend:
+
+```bash
+cd backend
 npm run prisma:generate
-npm run infra:up
 npm run prisma:migrate
 npm run start:dev
 ```
 
-Redis is configured in `docker-compose.yml`.
+Run admin:
 
-## Backend Architecture
-
-```text
-backend/src/
-  modules/
-    order/
-    user/
-    driver/
-    pricing/
-    payment/
-    auth/
-  infrastructure/
-    db/
-    redis/
-    queue/
-    socket/
+```bash
+cd admin
+npm run dev
 ```
 
-Main rule: no business logic in controllers.
-
-## Customer App
+Run mobile apps:
 
 ```bash
 cd customer
-npm install
+npm run start
+
+cd ../driver
 npm run start
 ```
 
-The passenger app includes Auth, Home map, Tariff selection, Driver search, Trip and Completion screens. It connects to Socket.IO and subscribes to `order:{id}` through `order.join`.
+Default URLs:
 
-## Driver App
+- Backend: `http://localhost:3000`
+- Admin: `http://localhost:3001`
+- Postgres: `localhost:5432`
+- Redis: `localhost:6379`
+
+## Core Flow
+
+1. Passenger logs in through dev auth and receives JWT.
+2. Passenger creates an order with `POST /orders`.
+3. Backend estimates fare and queues `find-driver`.
+4. `MatchingModule` searches nearby `ONLINE` drivers in Redis GEO.
+5. Driver receives `NEW_ORDER` over Socket.IO.
+6. Driver accepts, arrives, starts and completes the trip.
+7. Driver location is sent every few seconds while active.
+8. Passenger receives realtime trip events.
+9. Completion creates a pending payment; payment can be marked paid.
+
+## Realtime Security
+
+Socket.IO clients must send:
+
+```ts
+auth: { accessToken }
+```
+
+The gateway verifies JWT before joining rooms. Room IDs are derived from the token and database state, not from client-provided `driverId` or `passengerId`.
+
+## Useful Commands
+
+Backend:
 
 ```bash
-cd driver
-npm install
-npm run start
+cd backend
+npm run build
+npm run start:dev
 ```
 
-The driver app includes online/offline status, geotracking, incoming order offers with a timer, navigation, trip start/complete actions and balance.
+Admin:
+
+```bash
+cd admin
+npm run typecheck
+npm run build
+npm run dev
+```
+
+Mobile:
+
+```bash
+cd customer
+npm run typecheck
+
+cd ../driver
+npm run typecheck
+```
+
+Docker:
+
+```bash
+docker compose up -d --build
+```
+
+## Documentation
+
+- Architecture: [docs/architecture.md](docs/architecture.md)
+- Roadmap: [docs/roadmap.md](docs/roadmap.md)
+- Deployment: [docs/deployment.md](docs/deployment.md)
+
+## CI/CD
+
+GitHub Actions runs backend build, admin typecheck/build and Docker image build. VPS deploy is skipped unless these GitHub secrets are configured:
+
+- `VPS_HOST`
+- `VPS_USER`
+- `VPS_SSH_KEY`
+- `VPS_APP_DIR`
