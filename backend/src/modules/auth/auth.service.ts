@@ -60,6 +60,8 @@ export class AuthService {
     });
 
     return {
+      developmentOnly: true,
+      warning: 'auth/dev-login is for local development and test builds only',
       user,
       driver,
       ...tokens,
