@@ -124,7 +124,9 @@ export class OrderService {
       });
 
       if (rideUpdate.count !== 1) {
-        throw new BadRequestException('Ride is not available for acceptance');
+        throw new BadRequestException(
+          'Ride has already been assigned or is no longer searching for a driver',
+        );
       }
 
       await tx.rideStatusHistory.create({

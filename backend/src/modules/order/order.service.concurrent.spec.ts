@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert';
+import { BadRequestException } from '@nestjs/common';
 import { UserRoleValue } from '../../common/roles';
 import { DriverStatusValue } from '../driver/driver-status';
 import { OrderService } from './order.service';
@@ -141,12 +142,29 @@ async function main() {
   const fulfilled = results.filter((result) => result.status === 'fulfilled');
   const rejected = results.filter((result) => result.status === 'rejected');
   const ride = state.rides.get('ride-1');
+  const busyDrivers = [...state.drivers.values()].filter(
+    (driver) => driver.status === DriverStatusValue.BUSY,
+  );
+  const onlineDrivers = [...state.drivers.values()].filter(
+    (driver) => driver.status === DriverStatusValue.ONLINE,
+  );
 
   assert.equal(fulfilled.length, 1);
   assert.equal(rejected.length, 1);
   assert.equal(ride?.status, OrderStatusValue.DRIVER_ASSIGNED);
   assert.ok(ride?.driverId === 'driver-1' || ride?.driverId === 'driver-2');
+  assert.equal(busyDrivers.length, 1);
+  assert.equal(onlineDrivers.length, 1);
+  assert.equal(busyDrivers[0].id, ride?.driverId);
   assert.equal(state.statusHistory.length, 1);
+
+  const rejectedReason =
+    rejected[0].status === 'rejected' ? rejected[0].reason : undefined;
+  assert.ok(rejectedReason instanceof BadRequestException);
+  assert.match(
+    rejectedReason.message,
+    /already been assigned|no longer searching/,
+  );
 }
 
 void main();
