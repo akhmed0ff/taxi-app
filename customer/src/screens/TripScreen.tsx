@@ -5,10 +5,9 @@ import { Order } from '../types/order';
 
 interface TripScreenProps {
   order: Order;
-  onCompleted: () => void;
 }
 
-export function TripScreen({ order, onCompleted }: TripScreenProps) {
+export function TripScreen({ order }: TripScreenProps) {
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
@@ -22,9 +21,6 @@ export function TripScreen({ order, onCompleted }: TripScreenProps) {
           <Pressable style={styles.iconButton}><Feather color="#111827" name="message-circle" size={22} /></Pressable>
           <Pressable style={styles.iconButton}><Feather color="#111827" name="phone" size={22} /></Pressable>
         </View>
-        <Pressable onPress={onCompleted} style={styles.primaryButton}>
-          <Text style={styles.primaryButtonText}>{t('finishDemoTrip')}</Text>
-        </Pressable>
       </View>
     </View>
   );
@@ -40,6 +36,4 @@ const styles = StyleSheet.create({
   driverMeta: { marginTop: 4, color: '#64748b' },
   actions: { flexDirection: 'row', gap: 12, marginTop: 16 },
   iconButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, backgroundColor: '#ffffff' },
-  primaryButton: { height: 50, marginTop: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#111827' },
-  primaryButtonText: { color: '#ffffff', fontWeight: '800' },
 });

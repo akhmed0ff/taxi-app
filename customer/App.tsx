@@ -109,10 +109,6 @@ export default function App() {
       )}
       {screen === 'trip' && order && (
         <TripScreen
-          onCompleted={() => {
-            setOrder({ ...order, status: 'COMPLETED' });
-            setScreen('complete');
-          }}
           order={order}
         />
       )}
