@@ -183,9 +183,15 @@ Already started:
 - Admin panel prototype.
 - Docker and CI/CD baseline.
 - Health, metrics and request logging.
+- Backend hardening for Stage 1 and Stage 3:
+  - JWT AuthGuard and role guard for protected HTTP endpoints.
+  - Protected orders, drivers, users and admin tariffs endpoints.
+  - Atomic ride accept with conditional `updateMany` so only one driver can claim a ride.
+  - Matching offer timeout with Redis GEO search, online-driver filtering and radius expansion.
+  - Service-level tests for order lifecycle, concurrent accept and matching timeout behavior.
 
 Next best focus:
 
-1. Harden Stage 1 with real auth guards, role guards and endpoint tests.
-2. Finish Stage 3 driver offer timeout and concurrent acceptance protection.
-3. Connect mobile apps to real backend endpoints instead of mock flows.
+1. Continue connecting admin panel screens to real backend endpoints.
+2. Add endpoint-level tests around protected admin/order/driver HTTP routes.
+3. Prepare production auth to replace development-only `POST /auth/dev-login`.

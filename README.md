@@ -122,7 +122,8 @@ Backend:
 
 ```bash
 cd backend
-npm run test:concurrent-accept
+npm test
+npm run test:core-flow
 npm run build
 npm run start:dev
 ```
@@ -156,6 +157,8 @@ docker compose up -d --build
 
 - Архитектура: [docs/architecture.md](docs/architecture.md)
 - Roadmap: [docs/roadmap.md](docs/roadmap.md)
+- Auth: [docs/auth.md](docs/auth.md)
+- Matching: [docs/matching.md](docs/matching.md)
 - Деплой: [docs/deployment.md](docs/deployment.md)
 
 ## CI/CD
