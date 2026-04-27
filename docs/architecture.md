@@ -108,9 +108,18 @@ Payment Service:
 
 Socket rooms:
 
+- `user:{id}`
 - `driver:{id}`
 - `passenger:{id}`
 - `order:{id}`
+
+Socket authentication:
+
+- clients send `accessToken` in `handshake.auth.accessToken`
+- gateway verifies JWT before joining any room
+- passenger rooms use `sub` from token
+- driver rooms use `Driver.id` resolved by token `sub`
+- `order.join` checks that the passenger owns the ride, the driver is assigned to it, or the user is an admin
 
 Events:
 

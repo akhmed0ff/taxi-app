@@ -1,3 +1,4 @@
+import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
   MessageBody,
@@ -7,6 +8,21 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { UserRole, UserRoleValue } from '../../common/roles';
+import { PrismaService } from '../db/prisma.service';
+
+interface AccessTokenPayload {
+  sub: string;
+  role: UserRole;
+}
+
+interface AuthenticatedSocketData {
+  userId: string;
+  role: UserRole;
+  driverId?: string;
+}
+
+type AuthenticatedSocket = Socket & { data: AuthenticatedSocketData };
 
 @WebSocketGateway({
   cors: {
@@ -17,31 +33,60 @@ export class SocketGateway implements OnGatewayConnection {
   @WebSocketServer()
   server: Server;
 
-  handleConnection(client: Socket) {
-    const { passengerId, userId, driverId, orderId, rideId } =
-      client.handshake.auth;
+  constructor(
+    private readonly jwt: JwtService,
+    private readonly prisma: PrismaService,
+  ) {}
 
-    const resolvedPassengerId = passengerId ?? userId;
-    const resolvedOrderId = orderId ?? rideId;
+  async handleConnection(client: AuthenticatedSocket) {
+    const accessToken = this.extractAccessToken(client);
 
-    if (resolvedPassengerId) {
-      void client.join(`passenger:${resolvedPassengerId}`);
+    if (!accessToken) {
+      client.disconnect(true);
+      return;
     }
 
-    if (driverId) {
-      void client.join(`driver:${driverId}`);
-    }
+    try {
+      const payload = await this.jwt.verifyAsync<AccessTokenPayload>(accessToken);
+      client.data.userId = payload.sub;
+      client.data.role = payload.role;
 
-    if (resolvedOrderId) {
-      void client.join(`order:${resolvedOrderId}`);
+      void client.join(`user:${payload.sub}`);
+
+      if (payload.role === UserRoleValue.PASSENGER) {
+        void client.join(`passenger:${payload.sub}`);
+      }
+
+      if (payload.role === UserRoleValue.DRIVER) {
+        const driver = await this.prisma.driver.findUnique({
+          where: { userId: payload.sub },
+          select: { id: true },
+        });
+
+        if (!driver) {
+          client.disconnect(true);
+          return;
+        }
+
+        client.data.driverId = driver.id;
+        void client.join(`driver:${driver.id}`);
+      }
+    } catch {
+      client.disconnect(true);
     }
   }
 
   @SubscribeMessage('order.join')
-  joinOrder(
-    @ConnectedSocket() client: Socket,
+  async joinOrder(
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody('orderId') orderId: string,
   ) {
+    const canJoin = await this.canJoinOrder(client, orderId);
+
+    if (!canJoin) {
+      return { ok: false };
+    }
+
     void client.join(`order:${orderId}`);
     return { ok: true };
   }
@@ -56,5 +101,49 @@ export class SocketGateway implements OnGatewayConnection {
 
   emitToOrder(orderId: string, event: string, payload: unknown) {
     this.server.to(`order:${orderId}`).emit(event, payload);
+  }
+
+  private extractAccessToken(client: Socket) {
+    const authToken = client.handshake.auth?.accessToken;
+    const bearerToken = client.handshake.headers.authorization;
+
+    if (typeof authToken === 'string') {
+      return authToken;
+    }
+
+    if (typeof bearerToken === 'string' && bearerToken.startsWith('Bearer ')) {
+      return bearerToken.slice('Bearer '.length);
+    }
+
+    return undefined;
+  }
+
+  private async canJoinOrder(client: AuthenticatedSocket, orderId: string) {
+    if (!client.data.userId || !client.data.role) {
+      return false;
+    }
+
+    if (client.data.role === UserRoleValue.ADMIN) {
+      return true;
+    }
+
+    const ride = await this.prisma.ride.findUnique({
+      where: { id: orderId },
+      select: { customerId: true, driverId: true },
+    });
+
+    if (!ride) {
+      return false;
+    }
+
+    if (client.data.role === UserRoleValue.PASSENGER) {
+      return ride.customerId === client.data.userId;
+    }
+
+    if (client.data.role === UserRoleValue.DRIVER) {
+      return ride.driverId === client.data.driverId;
+    }
+
+    return false;
   }
 }

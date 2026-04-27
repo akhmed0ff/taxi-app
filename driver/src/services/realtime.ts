@@ -6,10 +6,10 @@ const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL ?? 'http://localhost:3000'
 export class DriverRealtimeClient {
   private socket?: Socket;
 
-  connect(driverId: string) {
+  connect(accessToken: string) {
     this.socket = io(SOCKET_URL, {
       transports: ['websocket'],
-      auth: { driverId },
+      auth: { accessToken },
     });
 
     return this.socket;

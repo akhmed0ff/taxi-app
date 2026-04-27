@@ -8,10 +8,10 @@ export type OrderEventHandler = (payload: Partial<Order>) => void;
 export class RealtimeClient {
   private socket?: Socket;
 
-  connect(passengerId: string) {
+  connect(accessToken: string) {
     this.socket = io(SOCKET_URL, {
       transports: ['websocket'],
-      auth: { passengerId },
+      auth: { accessToken },
     });
 
     return this.socket;
