@@ -42,7 +42,7 @@ Pipeline:
 5. Install admin dependencies.
 6. Typecheck and build admin.
 7. Build Docker images through `docker compose`.
-8. Deploy to VPS on push to `main`.
+8. Deploy to VPS on push to `main` when VPS secrets are configured.
 
 Required GitHub secrets for deploy:
 
@@ -52,6 +52,8 @@ VPS_USER
 VPS_SSH_KEY
 VPS_APP_DIR
 ```
+
+If these secrets are not configured, the deploy job is skipped successfully after CI and Docker build complete.
 
 ## VPS / Cloud
 

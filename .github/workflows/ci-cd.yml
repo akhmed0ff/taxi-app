@@ -84,15 +84,31 @@ jobs:
     runs-on: ubuntu-latest
     needs: docker
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
     steps:
+      - name: Check deploy secrets
+        id: deploy_config
+        run: |
+          if [ -n "$VPS_HOST" ] && [ -n "$VPS_USER" ] && [ -n "$VPS_SSH_KEY" ] && [ -n "$VPS_APP_DIR" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "VPS deploy skipped: configure VPS_HOST, VPS_USER, VPS_SSH_KEY and VPS_APP_DIR secrets to enable deploy."
+          fi
+
       - name: Deploy over SSH
+        if: steps.deploy_config.outputs.ready == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
+          host: ${{ env.VPS_HOST }}
+          username: ${{ env.VPS_USER }}
+          key: ${{ env.VPS_SSH_KEY }}
           script: |
-            cd ${{ secrets.VPS_APP_DIR }}
+            cd ${{ env.VPS_APP_DIR }}
             git pull --ff-only
             docker compose build backend admin
             docker compose up -d postgres redis backend admin
