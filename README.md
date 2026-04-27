@@ -23,7 +23,8 @@ docs/      архитектура, деплой и roadmap
 
 ## Текущее состояние
 
-- Dev-auth endpoint с JWT токенами: `POST /auth/dev-login`
+- Auth endpoints: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`
+- Development-only auth shortcut: `POST /auth/dev-login` работает только при `NODE_ENV != production`
 - JWT AuthGuard и RoleGuard для HTTP endpoints
 - Жизненный цикл заказа: создать, принять, приехать, начать, завершить, оплатить
 - Отдельный `MatchingModule`
@@ -96,7 +97,7 @@ npm run start
 
 ## Основной сценарий
 
-1. Пассажир входит через dev-auth и получает JWT.
+1. Пассажир регистрируется или входит через `POST /auth/register` / `POST /auth/login` и получает JWT.
 2. Пассажир создает заказ через `POST /orders`.
 3. Backend считает примерную стоимость и ставит задачу `find-driver` в очередь.
 4. `MatchingModule` ищет ближайших `ONLINE` водителей через Redis GEO.
@@ -146,6 +147,13 @@ npm run typecheck
 cd ../driver
 npm run typecheck
 ```
+
+Для локального MVP mobile auth используются пароли из env:
+
+- `EXPO_PUBLIC_CUSTOMER_PASSWORD`
+- `EXPO_PUBLIC_DRIVER_PASSWORD`
+
+Если env не задан, приложения используют `password123`.
 
 Docker:
 

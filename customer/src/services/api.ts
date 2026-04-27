@@ -4,6 +4,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 export interface CustomerSession {
   accessToken: string;
+  refreshToken: string;
   customerId: string;
 }
 
@@ -30,26 +31,55 @@ interface BackendRide {
 }
 
 export async function loginPassenger(phone: string): Promise<CustomerSession> {
-  const response = await fetch(`${API_URL}/auth/dev-login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      phone,
-      name: 'Passenger',
-      role: 'PASSENGER',
-    }),
+  const password = process.env.EXPO_PUBLIC_CUSTOMER_PASSWORD ?? 'password123';
+  const data = await registerOrLogin({
+    phone,
+    password,
+    name: 'Passenger',
+    role: 'PASSENGER',
   });
-
-  if (!response.ok) {
-    throw new Error('Failed to login passenger');
-  }
-
-  const data = await response.json();
 
   return {
     accessToken: data.accessToken,
+    refreshToken: data.refreshToken,
     customerId: data.user.id,
   };
+}
+
+async function registerOrLogin(input: {
+  phone: string;
+  password: string;
+  name: string;
+  role: 'PASSENGER';
+}) {
+  const registerResponse = await fetch(`${API_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  if (registerResponse.ok) {
+    return registerResponse.json();
+  }
+
+  if (registerResponse.status !== 409) {
+    throw new Error(await readError(registerResponse, 'Failed to register passenger'));
+  }
+
+  const loginResponse = await fetch(`${API_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      phone: input.phone,
+      password: input.password,
+    }),
+  });
+
+  if (!loginResponse.ok) {
+    throw new Error(await readError(loginResponse, 'Failed to login passenger'));
+  }
+
+  return loginResponse.json();
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
