@@ -3,6 +3,7 @@ import { SafeAreaView, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import {
   acceptOrder,
+  cancelOrder,
   completeTrip,
   DriverSession,
   loginDriver,
@@ -49,6 +50,22 @@ export default function App() {
         });
         setScreen('offer');
       });
+      const unsubscribeCancelled = driverRealtimeClient.onRideCancelled((rideId) => {
+        setTrip((current) => {
+          if (!current || current.id !== rideId) {
+            return current;
+          }
+
+          setStatus('ONLINE');
+          setScreen('online');
+          return undefined;
+        });
+      });
+      const unsubscribeNewOrder = unsubscribe;
+      unsubscribe = () => {
+        unsubscribeNewOrder();
+        unsubscribeCancelled();
+      };
     });
 
     return () => {
@@ -92,6 +109,21 @@ export default function App() {
     }
   }
 
+  async function handleCancelTrip() {
+    if (!session || !trip) {
+      return;
+    }
+
+    try {
+      await cancelOrder(session.accessToken, trip.id);
+      setTrip(undefined);
+      setStatus('ONLINE');
+      setScreen('online');
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -120,6 +152,7 @@ export default function App() {
       )}
       {screen === 'navigation' && trip && (
         <NavigationScreen
+          onCancel={handleCancelTrip}
           onArrived={async () => {
             if (!session) return;
             await markArrived(session.accessToken, trip.id);

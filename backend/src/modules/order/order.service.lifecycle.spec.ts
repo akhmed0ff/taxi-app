@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { UserRoleValue } from '../../common/roles';
 import { DriverStatusValue } from '../driver/driver-status';
 import { PaymentMethodValue } from '../payment/payment-method';
@@ -51,7 +51,7 @@ function createCoreFlowMock() {
       method: string;
       status: string;
     }>,
-    statusHistory: [] as Array<{ rideId: string; status: string }>,
+    statusHistory: [] as Array<{ rideId: string; status: string; reason?: string }>,
     queuedJobs: [] as Array<{ name: string; data: unknown }>,
     emittedEvents: [] as Array<{ room: string; event: string; payload: unknown }>,
   };
@@ -83,9 +83,11 @@ function createCoreFlowMock() {
     findUnique: async ({
       where,
       select,
+      include,
     }: {
       where: { id: string };
       select?: { driver?: { select: { userId: boolean } } };
+      include?: { driver?: boolean };
     }) => {
       const ride = state.rides.get(where.id);
 
@@ -100,6 +102,13 @@ function createCoreFlowMock() {
         };
       }
 
+      if (include?.driver) {
+        return {
+          ...ride,
+          driver: ride.driverId ? state.drivers.get(ride.driverId) : null,
+        };
+      }
+
       return ride;
     },
     update: async ({
@@ -107,7 +116,9 @@ function createCoreFlowMock() {
       data,
     }: {
       where: { id: string };
-      data: Partial<RideState> & { statusHistory?: { create: { status: string } } };
+      data: Partial<RideState> & {
+        statusHistory?: { create: { status: string; reason?: string } };
+      };
     }) => {
       const ride = state.rides.get(where.id);
       assert.ok(ride, 'ride must exist before update');
@@ -120,6 +131,7 @@ function createCoreFlowMock() {
         state.statusHistory.push({
           rideId: where.id,
           status: data.statusHistory.create.status,
+          reason: data.statusHistory.create.reason,
         });
       }
 
@@ -170,7 +182,7 @@ function createCoreFlowMock() {
       findUnique: rideApi.findUnique,
     },
     rideStatusHistory: {
-      create: async ({ data }: { data: { rideId: string; status: string } }) => {
+      create: async ({ data }: { data: { rideId: string; status: string; reason?: string } }) => {
         state.statusHistory.push(data);
         return data;
       },
@@ -290,6 +302,11 @@ function createCoreFlowMock() {
 async function main() {
   await testLifecycleCreatesPendingPayment();
   await testInvalidTransitionFails();
+  await testPassengerCanCancelBeforeTripStarts();
+  await testDriverCanCancelAssignedRideAndReturnsOnline();
+  await testPassengerCannotCancelInProgressRide();
+  await testDriverCannotCancelAnotherRide();
+  await testCompletedRideCannotBeCancelled();
 }
 
 async function testLifecycleCreatesPendingPayment() {
@@ -379,6 +396,159 @@ async function testInvalidTransitionFails() {
       /Invalid ride status transition: DRIVER_ASSIGNED -> IN_PROGRESS/.test(
         error.message,
       ),
+  );
+}
+
+async function testPassengerCanCancelBeforeTripStarts() {
+  const { service, state } = createCoreFlowMock();
+  const passengerUser = {
+    userId: 'passenger-1',
+    role: UserRoleValue.PASSENGER,
+  };
+
+  const createdRide = await service.create({
+    customerId: passengerUser.userId,
+    pickupLat: 41.0167,
+    pickupLng: 70.1436,
+    dropoffLat: 41.03,
+    dropoffLng: 70.16,
+  });
+
+  const cancelled = await service.cancelRide(
+    createdRide.id,
+    'PASSENGER_CHANGED_PLANS',
+    passengerUser,
+  );
+
+  assert.equal(cancelled.ride.status, OrderStatusValue.CANCELLED);
+  assert.equal(
+    state.statusHistory.at(-1)?.reason,
+    'PASSENGER_CHANGED_PLANS',
+  );
+  assert.ok(
+    state.emittedEvents.some((event) => event.event === 'RIDE_CANCELLED'),
+  );
+}
+
+async function testDriverCanCancelAssignedRideAndReturnsOnline() {
+  const { service, state } = createCoreFlowMock();
+  const passengerUser = {
+    userId: 'passenger-1',
+    role: UserRoleValue.PASSENGER,
+  };
+  const driverUser = {
+    userId: 'driver-user-1',
+    role: UserRoleValue.DRIVER,
+  };
+
+  const createdRide = await service.create({
+    customerId: passengerUser.userId,
+    pickupLat: 41.0167,
+    pickupLng: 70.1436,
+    dropoffLat: 41.03,
+    dropoffLng: 70.16,
+  });
+  await service.accept(createdRide.id, 'driver-1', driverUser);
+
+  const cancelled = await service.cancelRide(
+    createdRide.id,
+    'DRIVER_UNAVAILABLE',
+    driverUser,
+  );
+
+  assert.equal(cancelled.ride.status, OrderStatusValue.CANCELLED);
+  assert.equal(state.drivers.get('driver-1')?.status, DriverStatusValue.ONLINE);
+}
+
+async function testPassengerCannotCancelInProgressRide() {
+  const { service } = createCoreFlowMock();
+  const passengerUser = {
+    userId: 'passenger-1',
+    role: UserRoleValue.PASSENGER,
+  };
+  const driverUser = {
+    userId: 'driver-user-1',
+    role: UserRoleValue.DRIVER,
+  };
+
+  const createdRide = await service.create({
+    customerId: passengerUser.userId,
+    pickupLat: 41.0167,
+    pickupLng: 70.1436,
+    dropoffLat: 41.03,
+    dropoffLng: 70.16,
+  });
+  await service.accept(createdRide.id, 'driver-1', driverUser);
+  await service.markDriverArrived(createdRide.id, driverUser);
+  await service.startTrip(createdRide.id, driverUser);
+
+  await assert.rejects(
+    () => service.cancelRide(createdRide.id, 'TOO_LATE', passengerUser),
+    (error) =>
+      error instanceof BadRequestException &&
+      /cannot be cancelled after trip started/.test(error.message),
+  );
+}
+
+async function testDriverCannotCancelAnotherRide() {
+  const { service } = createCoreFlowMock();
+  const passengerUser = {
+    userId: 'passenger-1',
+    role: UserRoleValue.PASSENGER,
+  };
+  const driverUser = {
+    userId: 'driver-user-1',
+    role: UserRoleValue.DRIVER,
+  };
+
+  const createdRide = await service.create({
+    customerId: passengerUser.userId,
+    pickupLat: 41.0167,
+    pickupLng: 70.1436,
+    dropoffLat: 41.03,
+    dropoffLng: 70.16,
+  });
+
+  await assert.rejects(
+    () => service.cancelRide(createdRide.id, 'NOT_MY_RIDE', driverUser),
+    (error) =>
+      error instanceof ForbiddenException &&
+      /Cannot cancel another driver ride/.test(error.message),
+  );
+}
+
+async function testCompletedRideCannotBeCancelled() {
+  const { service } = createCoreFlowMock();
+  const passengerUser = {
+    userId: 'passenger-1',
+    role: UserRoleValue.PASSENGER,
+  };
+  const driverUser = {
+    userId: 'driver-user-1',
+    role: UserRoleValue.DRIVER,
+  };
+  const adminUser = {
+    userId: 'admin-1',
+    role: UserRoleValue.ADMIN,
+  };
+
+  const createdRide = await service.create({
+    customerId: passengerUser.userId,
+    pickupLat: 41.0167,
+    pickupLng: 70.1436,
+    dropoffLat: 41.03,
+    dropoffLng: 70.16,
+  });
+  await service.accept(createdRide.id, 'driver-1', driverUser);
+  await service.markDriverArrived(createdRide.id, driverUser);
+  await service.startTrip(createdRide.id, driverUser);
+  await service.completeTrip(createdRide.id, PaymentMethodValue.CASH, driverUser);
+
+  await assert.rejects(
+    () => service.cancelRide(createdRide.id, 'ADMIN_LATE_CANCEL', adminUser),
+    (error) =>
+      error instanceof BadRequestException &&
+      /cannot be cancelled in its current status/.test(error.message),
   );
 }
 

@@ -8,7 +8,12 @@ import { HistoryScreen } from './src/screens/HistoryScreen';
 import { SearchDriverScreen } from './src/screens/SearchDriverScreen';
 import { TariffScreen } from './src/screens/TariffScreen';
 import { TripScreen } from './src/screens/TripScreen';
-import { createOrder, CustomerSession, loginPassenger } from './src/services/api';
+import {
+  cancelOrder,
+  createOrder,
+  CustomerSession,
+  loginPassenger,
+} from './src/services/api';
 import { realtimeClient } from './src/services/realtime';
 import { Order, Point, TariffClass } from './src/types/order';
 
@@ -53,6 +58,10 @@ export default function App() {
           setScreen('complete');
         }
 
+        if (nextOrder.status === 'CANCELLED') {
+          setScreen('home');
+        }
+
         return nextOrder;
       });
     });
@@ -85,6 +94,20 @@ export default function App() {
     setScreen('home');
   }
 
+  async function handleCancelOrder() {
+    if (!session || !order) {
+      return;
+    }
+
+    try {
+      await cancelOrder(session.accessToken, order.id);
+      setOrder(undefined);
+      setScreen('home');
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -113,10 +136,11 @@ export default function App() {
         <TariffScreen onTariffSelected={handleTariffSelected} />
       )}
       {screen === 'search' && order && (
-        <SearchDriverScreen order={order} />
+        <SearchDriverScreen onCancel={handleCancelOrder} order={order} />
       )}
       {screen === 'trip' && order && (
         <TripScreen
+          onCancel={handleCancelOrder}
           order={order}
         />
       )}

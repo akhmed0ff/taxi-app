@@ -62,6 +62,21 @@ export class DriverRealtimeClient {
     };
   }
 
+  onRideCancelled(handler: (rideId: string) => void) {
+    const wrappedHandler = (payload: { ride?: { id?: string }; rideId?: string }) => {
+      const rideId = payload.ride?.id ?? payload.rideId;
+
+      if (rideId) {
+        handler(rideId);
+      }
+    };
+
+    this.socket?.on('RIDE_CANCELLED', wrappedHandler);
+    return () => {
+      this.socket?.off('RIDE_CANCELLED', wrappedHandler);
+    };
+  }
+
   disconnect() {
     this.socket?.disconnect();
     this.socket = undefined;

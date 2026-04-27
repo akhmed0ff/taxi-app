@@ -5,9 +5,12 @@ import { Order } from '../types/order';
 
 interface TripScreenProps {
   order: Order;
+  onCancel: () => void;
 }
 
-export function TripScreen({ order }: TripScreenProps) {
+export function TripScreen({ onCancel, order }: TripScreenProps) {
+  const canCancel = order.status !== 'IN_PROGRESS';
+
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
@@ -21,6 +24,11 @@ export function TripScreen({ order }: TripScreenProps) {
           <Pressable style={styles.iconButton}><Feather color="#111827" name="message-circle" size={22} /></Pressable>
           <Pressable style={styles.iconButton}><Feather color="#111827" name="phone" size={22} /></Pressable>
         </View>
+        {canCancel && (
+          <Pressable onPress={onCancel} style={styles.cancelButton}>
+            <Text style={styles.cancelText}>Отменить заказ</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -36,4 +44,6 @@ const styles = StyleSheet.create({
   driverMeta: { marginTop: 4, color: '#64748b' },
   actions: { flexDirection: 'row', gap: 12, marginTop: 16 },
   iconButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, backgroundColor: '#ffffff' },
+  cancelButton: { height: 48, marginTop: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#fecaca', borderRadius: 8, backgroundColor: '#fff1f2' },
+  cancelText: { fontWeight: '800', color: '#b91c1c' },
 });

@@ -300,6 +300,59 @@ export class OrderService {
     return payload;
   }
 
+  async cancelRide(rideId: string, reason = 'CANCELLED_BY_USER', user?: AuthUser) {
+    const ride = await this.prisma.ride.findUnique({
+      where: { id: rideId },
+      include: {
+        driver: true,
+      },
+    });
+
+    if (!ride) {
+      throw new NotFoundException('Ride not found');
+    }
+
+    this.assertCancelAllowed(ride, user);
+
+    const cancelledRide = await this.prisma.ride.update({
+      where: { id: rideId },
+      data: {
+        status: OrderStatusValue.CANCELLED,
+        statusHistory: {
+          create: {
+            status: OrderStatusValue.CANCELLED,
+            reason,
+          },
+        },
+      },
+    });
+
+    if (ride.driverId) {
+      await this.prisma.driver.update({
+        where: { id: ride.driverId },
+        data: { status: DriverStatusValue.ONLINE },
+      });
+    }
+
+    const payload = { ride: cancelledRide, reason };
+    this.socket.emitToOrder(cancelledRide.id, RealtimeEvent.RIDE_CANCELLED, payload);
+    this.socket.emitToPassenger(
+      cancelledRide.customerId,
+      RealtimeEvent.RIDE_CANCELLED,
+      payload,
+    );
+
+    if (cancelledRide.driverId) {
+      this.socket.emitToDriver(
+        cancelledRide.driverId,
+        RealtimeEvent.RIDE_CANCELLED,
+        payload,
+      );
+    }
+
+    return payload;
+  }
+
   async pay(rideId: string, user?: AuthUser) {
     const ride = await this.findOne(rideId);
 
@@ -359,6 +412,49 @@ export class OrderService {
         `Invalid ride status transition: ${currentStatus} -> ${nextStatus}`,
       );
     }
+  }
+
+  private assertCancelAllowed(
+    ride: {
+      customerId: string;
+      driverId: string | null;
+      status: string;
+      driver?: { userId: string } | null;
+    },
+    user?: AuthUser,
+  ) {
+    if (
+      ride.status === OrderStatusValue.COMPLETED ||
+      ride.status === OrderStatusValue.CANCELLED
+    ) {
+      throw new BadRequestException('Ride cannot be cancelled in its current status');
+    }
+
+    if (user?.role !== UserRoleValue.ADMIN && ride.status === OrderStatusValue.IN_PROGRESS) {
+      throw new BadRequestException('Ride cannot be cancelled after trip started');
+    }
+
+    if (!user || user.role === UserRoleValue.ADMIN) {
+      return;
+    }
+
+    if (user.role === UserRoleValue.PASSENGER) {
+      if (ride.customerId !== user.userId) {
+        throw new ForbiddenException('Cannot cancel another passenger ride');
+      }
+
+      return;
+    }
+
+    if (user.role === UserRoleValue.DRIVER) {
+      if (!ride.driverId || ride.driver?.userId !== user.userId) {
+        throw new ForbiddenException('Cannot cancel another driver ride');
+      }
+
+      return;
+    }
+
+    throw new ForbiddenException('Cannot cancel ride');
   }
 
   private async assertDriverActor(driverId: string, user?: AuthUser) {

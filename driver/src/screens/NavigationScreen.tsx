@@ -6,9 +6,10 @@ import { ActiveTrip } from '../types/order';
 interface NavigationScreenProps {
   trip: ActiveTrip;
   onArrived: () => void;
+  onCancel: () => void;
 }
 
-export function NavigationScreen({ trip, onArrived }: NavigationScreenProps) {
+export function NavigationScreen({ onArrived, onCancel, trip }: NavigationScreenProps) {
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
@@ -28,6 +29,9 @@ export function NavigationScreen({ trip, onArrived }: NavigationScreenProps) {
             <Text style={styles.primaryText}>{t('arrived')}</Text>
           </Pressable>
         </View>
+        <Pressable onPress={onCancel} style={styles.cancelButton}>
+          <Text style={styles.cancelText}>Отказаться от заказа</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -46,4 +50,6 @@ const styles = StyleSheet.create({
   mapButtonText: { marginTop: 2, fontSize: 12, fontWeight: '800' },
   primaryButton: { flex: 1, height: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#111827' },
   primaryText: { color: '#ffffff', fontWeight: '900' },
+  cancelButton: { height: 48, marginTop: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#fecaca', borderRadius: 8, backgroundColor: '#fff1f2' },
+  cancelText: { fontWeight: '900', color: '#b91c1c' },
 });

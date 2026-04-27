@@ -15,6 +15,7 @@ import { Roles } from '../../common/auth/roles.decorator';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { UserRoleValue } from '../../common/roles';
 import { CompleteOrderDto } from './dto/complete-order.dto';
+import { CancelOrderDto } from './dto/cancel-order.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderService } from './order.service';
 
@@ -83,6 +84,16 @@ export class OrderController {
   @Roles(UserRoleValue.DRIVER, UserRoleValue.ADMIN)
   start(@Param('rideId') rideId: string, @CurrentUser() user: AuthUser) {
     return this.orderService.startTrip(rideId, user);
+  }
+
+  @Patch(':rideId/cancel')
+  @Roles(UserRoleValue.PASSENGER, UserRoleValue.DRIVER, UserRoleValue.ADMIN)
+  cancel(
+    @Param('rideId') rideId: string,
+    @Body() dto: CancelOrderDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.orderService.cancelRide(rideId, dto.reason, user);
   }
 
   @Patch(':rideId/complete')

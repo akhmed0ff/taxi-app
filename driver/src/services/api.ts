@@ -169,6 +169,27 @@ export async function completeTrip(accessToken: string, orderId: string) {
   return response.json();
 }
 
+export async function cancelOrder(
+  accessToken: string,
+  orderId: string,
+  reason = 'DRIVER_CANCELLED',
+) {
+  const response = await fetch(`${API_URL}/orders/${orderId}/cancel`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ reason }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to cancel order'));
+  }
+
+  return response.json();
+}
+
 export async function fetchDriverRideHistory(
   accessToken: string,
   filter: RideHistoryFilter = 'completed',
