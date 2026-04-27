@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { GeoService } from '../../infrastructure/redis/geo.service';
 import { PrismaService } from '../../infrastructure/db/prisma.service';
 import { RealtimeEvent } from '../../common/realtime-events';
@@ -21,14 +21,41 @@ export class DriverService {
     });
   }
 
-  updateStatus(driverId: string, status: DriverStatus) {
-    return this.prisma.driver.update({
+  async updateStatus(driverId: string, status: DriverStatus) {
+    const driver = await this.prisma.driver.update({
       where: { id: driverId },
       data: { status },
     });
+
+    if (
+      status === DriverStatusValue.OFFLINE ||
+      status === DriverStatusValue.BLOCKED
+    ) {
+      await this.geo.removeDriverLocation(driverId);
+    }
+
+    return driver;
   }
 
   async updateLocation(driverId: string, lat: number, lng: number) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { status: true },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    if (
+      driver.status !== DriverStatusValue.ONLINE &&
+      driver.status !== DriverStatusValue.BUSY
+    ) {
+      throw new BadRequestException(
+        'Driver must be ONLINE or BUSY to update location',
+      );
+    }
+
     await this.geo.updateDriverLocation(driverId, lat, lng);
 
     const activeRide = await this.prisma.ride.findFirst({

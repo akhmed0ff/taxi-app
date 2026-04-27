@@ -61,6 +61,9 @@ Driver Service:
 - online/offline status
 - current geolocation through Redis GEO
 - rating
+- `OFFLINE` and `BLOCKED` drivers are removed from Redis GEO
+- only `ONLINE` and `BUSY` drivers can update location
+- only `ONLINE` drivers can receive and accept new ride offers
 
 Order Service:
 

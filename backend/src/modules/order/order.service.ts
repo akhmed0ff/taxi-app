@@ -89,6 +89,19 @@ export class OrderService {
   }
 
   async accept(rideId: string, driverId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { status: true },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    if (driver.status !== DriverStatusValue.ONLINE) {
+      throw new BadRequestException('Only ONLINE drivers can accept new rides');
+    }
+
     const ride = await this.transitionRide(rideId, OrderStatusValue.DRIVER_ASSIGNED, {
       driverId,
     });
