@@ -13,8 +13,7 @@ export class RegisterDto {
   @IsString()
   name?: string;
 
-  @IsOptional()
   @IsString()
-  @IsIn([UserRoleValue.PASSENGER, UserRoleValue.DRIVER, UserRoleValue.ADMIN])
-  role?: string;
+  @IsIn([UserRoleValue.PASSENGER, UserRoleValue.DRIVER])
+  role: string;
 }

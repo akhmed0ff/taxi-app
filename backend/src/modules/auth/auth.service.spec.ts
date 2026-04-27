@@ -1,5 +1,10 @@
 import { strict as assert } from 'node:assert';
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { UserRoleValue } from '../../common/roles';
 import { AuthService } from './auth.service';
 
@@ -189,7 +194,14 @@ async function testRegisterLoginRefreshLogout() {
   });
 
   assert.equal(registered.user.phone, '+998900001111');
-  assert.ok(registered.user.passwordHash);
+  const storedUser = [...state.users.values()].find(
+    (user) => user.phone === '+998900001111',
+  );
+  assert.ok(storedUser?.passwordHash);
+  assert.notEqual(storedUser.passwordHash, 'password123');
+  assert.ok(storedUser.passwordHash.startsWith('$2'));
+  assert.equal(await bcrypt.compare('password123', storedUser.passwordHash), true);
+  assert.equal('passwordHash' in registered.user, false);
   assert.ok(registered.accessToken);
   assert.ok(registered.refreshToken);
 
@@ -222,6 +234,23 @@ async function testRegisterLoginRefreshLogout() {
   });
   assert.deepEqual(logout, { ok: true });
   assert.equal([...state.refreshTokens.values()].filter((token) => token.revoked).length, 2);
+}
+
+async function testRegisterRejectsDuplicatePhone() {
+  const { service } = createAuthMock();
+  const input = {
+    phone: '+998900004444',
+    password: 'password123',
+    name: 'Passenger',
+    role: UserRoleValue.PASSENGER,
+  };
+
+  await service.register(input);
+
+  await assert.rejects(
+    () => service.register(input),
+    ConflictException,
+  );
 }
 
 async function testDevLoginDisabledInProduction() {
@@ -258,6 +287,7 @@ async function testRegisterCreatesDriverProfile() {
 
 async function main() {
   await testRegisterLoginRefreshLogout();
+  await testRegisterRejectsDuplicatePhone();
   await testDevLoginDisabledInProduction();
   await testRegisterCreatesDriverProfile();
 }

@@ -8,6 +8,7 @@ import {
 import { Buffer } from 'node:buffer';
 import { promisify } from 'node:util';
 import { randomBytes, createHash, pbkdf2, timingSafeEqual } from 'node:crypto';
+import * as bcrypt from 'bcrypt';
 import { UserRole, UserRoleValue } from '../../common/roles';
 import { PrismaService } from '../../infrastructure/db/prisma.service';
 import { DevLoginDto } from './dto/dev-login.dto';
@@ -16,9 +17,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 
 const pbkdf2Async = promisify(pbkdf2);
-const PASSWORD_ITERATIONS = 120000;
-const PASSWORD_KEY_LENGTH = 64;
-const PASSWORD_DIGEST = 'sha512';
+const BCRYPT_SALT_ROUNDS = 12;
 
 @Injectable()
 export class AuthService {
@@ -31,33 +30,21 @@ export class AuthService {
     const existingUser = await this.prisma.user.findUnique({
       where: { phone: dto.phone },
     });
-    const role = (dto.role ?? UserRoleValue.PASSENGER) as UserRole;
-    const passwordHash = await this.hashPassword(dto.password);
-    const user =
-      existingUser && !existingUser.passwordHash
-        ? await this.prisma.user.update({
-            where: { id: existingUser.id },
-            data: {
-              name: dto.name,
-              passwordHash,
-              role,
-            },
-          })
-        : existingUser
-          ? undefined
-          : await this.prisma.user.create({
-              data: {
-                phone: dto.phone,
-                name: dto.name,
-                passwordHash,
-                role,
-              },
-            });
 
-    if (!user) {
+    if (existingUser) {
       throw new ConflictException('User with this phone already exists');
     }
 
+    const role = dto.role as UserRole;
+    const passwordHash = await this.hashPassword(dto.password);
+    const user = await this.prisma.user.create({
+      data: {
+        phone: dto.phone,
+        name: dto.name,
+        passwordHash,
+        role,
+      },
+    });
     const driver = await this.ensureDriverProfile(user.id, user.role as UserRole);
     const tokens = await this.issueTokens({
       id: user.id,
@@ -65,7 +52,7 @@ export class AuthService {
     });
 
     return {
-      user,
+      user: this.toPublicUser(user),
       driver,
       ...tokens,
     };
@@ -96,7 +83,7 @@ export class AuthService {
     });
 
     return {
-      user,
+      user: this.toPublicUser(user),
       driver,
       ...tokens,
     };
@@ -132,7 +119,7 @@ export class AuthService {
     });
 
     return {
-      user: storedToken.user,
+      user: this.toPublicUser(storedToken.user),
       driver,
       ...tokens,
     };
@@ -197,7 +184,7 @@ export class AuthService {
     return {
       developmentOnly: true,
       warning: 'auth/dev-login is for local development and test builds only',
-      user,
+      user: this.toPublicUser(user),
       driver,
       ...tokens,
     };
@@ -220,25 +207,14 @@ export class AuthService {
   }
 
   private async hashPassword(password: string) {
-    const salt = randomBytes(16).toString('hex');
-    const derivedKey = await pbkdf2Async(
-      password,
-      salt,
-      PASSWORD_ITERATIONS,
-      PASSWORD_KEY_LENGTH,
-      PASSWORD_DIGEST,
-    );
-
-    return [
-      'pbkdf2',
-      PASSWORD_DIGEST,
-      PASSWORD_ITERATIONS,
-      salt,
-      derivedKey.toString('hex'),
-    ].join('$');
+    return bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
   }
 
   private async verifyPassword(password: string, passwordHash: string) {
+    if (passwordHash.startsWith('$2')) {
+      return bcrypt.compare(password, passwordHash);
+    }
+
     const [scheme, digest, iterations, salt, key] = passwordHash.split('$');
 
     if (scheme !== 'pbkdf2' || !digest || !iterations || !salt || !key) {
@@ -255,5 +231,11 @@ export class AuthService {
 
     const storedKey = Buffer.from(key, 'hex');
     return derivedKey.length === storedKey.length && timingSafeEqual(derivedKey, storedKey);
+  }
+
+  private toPublicUser<T extends { passwordHash?: string | null }>(user: T) {
+    const publicUser = { ...user };
+    delete publicUser.passwordHash;
+    return publicUser;
   }
 }
