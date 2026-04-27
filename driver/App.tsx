@@ -13,13 +13,14 @@ import {
 import { driverRealtimeClient } from './src/services/realtime';
 import { useDriverLocationTracking } from './src/hooks/useDriverLocationTracking';
 import { BalanceScreen } from './src/screens/BalanceScreen';
+import { HistoryScreen } from './src/screens/HistoryScreen';
 import { NavigationScreen } from './src/screens/NavigationScreen';
 import { OnlineScreen } from './src/screens/OnlineScreen';
 import { OrderOfferScreen } from './src/screens/OrderOfferScreen';
 import { TripScreen } from './src/screens/TripScreen';
 import { ActiveTrip, DriverStatus, OrderOffer } from './src/types/order';
 
-type Screen = 'online' | 'offer' | 'navigation' | 'trip' | 'balance';
+type Screen = 'online' | 'offer' | 'navigation' | 'trip' | 'balance' | 'history';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('online');
@@ -95,7 +96,17 @@ export default function App() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       {screen === 'online' && (
-        <OnlineScreen onToggleOnline={toggleOnline} status={status} />
+        <OnlineScreen
+          onOpenHistory={() => setScreen('history')}
+          onToggleOnline={toggleOnline}
+          status={status}
+        />
+      )}
+      {screen === 'history' && session && (
+        <HistoryScreen
+          accessToken={session.accessToken}
+          onBack={() => setScreen('online')}
+        />
       )}
       {screen === 'offer' && offer && (
         <OrderOfferScreen

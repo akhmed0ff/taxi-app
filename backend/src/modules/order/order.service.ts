@@ -22,6 +22,7 @@ import {
 } from '../pricing/tariff-class';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { ORDER_STATUS_FLOW, OrderStatus, OrderStatusValue } from './order-status';
+import { getRideStatusesForHistoryFilter } from './ride-history-filter';
 
 interface CompleteTripInput {
   paymentMethod?: PaymentMethod;
@@ -120,6 +121,60 @@ export class OrderService {
         },
       },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  findPassengerHistory(user: AuthUser, filter?: string) {
+    const statuses = getRideStatusesForHistoryFilter(filter);
+
+    return this.prisma.ride.findMany({
+      where: {
+        customerId: user.userId,
+        ...(statuses ? { status: { in: statuses } } : {}),
+      },
+      include: {
+        driver: {
+          include: {
+            user: true,
+            vehicle: true,
+          },
+        },
+        payment: true,
+        statusHistory: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  }
+
+  async findDriverHistory(user: AuthUser, filter?: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId: user.userId },
+      select: { id: true },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const statuses = getRideStatusesForHistoryFilter(filter);
+
+    return this.prisma.ride.findMany({
+      where: {
+        driverId: driver.id,
+        ...(statuses ? { status: { in: statuses } } : {}),
+      },
+      include: {
+        customer: true,
+        payment: true,
+        statusHistory: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
     });
   }
 

@@ -42,9 +42,23 @@ interface BackendRide {
   dropoffAddress?: string;
   estimatedFare?: number;
   finalFare?: number;
+  tariffClass?: string;
+  distanceMeters?: number;
+  waitingMinutes?: number;
+  stopMinutes?: number;
   createdAt: string;
   customer?: BackendUser;
   driver?: BackendDriver & { user?: BackendUser };
+  payment?: {
+    status: string;
+    method: string;
+    amount: number;
+  };
+  statusHistory?: Array<{
+    status: string;
+    reason?: string;
+    createdAt: string;
+  }>;
 }
 
 interface BackendTariff {
@@ -62,6 +76,22 @@ interface BackendTariff {
 
 let adminAccessToken: string | undefined;
 
+export interface AdminRideDetails extends AdminOrder {
+  customerPhone: string;
+  driverPhone: string;
+  tariffClass: string;
+  distanceKm: number;
+  waitingMinutes: number;
+  stopMinutes: number;
+  paymentStatus: string;
+  paymentMethod: string;
+  statusHistory: Array<{
+    status: string;
+    reason?: string;
+    createdAt: string;
+  }>;
+}
+
 export async function fetchAdminDrivers() {
   const data = await apiFetch<BackendDriver[]>('/drivers');
   return data.map(mapBackendDriver);
@@ -70,6 +100,11 @@ export async function fetchAdminDrivers() {
 export async function fetchActiveOrders() {
   const data = await apiFetch<BackendRide[]>('/orders/active');
   return data.map(mapBackendRide);
+}
+
+export async function fetchRideDetails(rideId: string) {
+  const data = await apiFetch<BackendRide>(`/orders/${rideId}`);
+  return mapBackendRideDetails(data);
 }
 
 export async function fetchTariffs() {
@@ -201,6 +236,21 @@ function mapBackendRide(ride: BackendRide): AdminOrder {
     pickup,
     destination,
     ...stableMapPosition(ride.id),
+  };
+}
+
+function mapBackendRideDetails(ride: BackendRide): AdminRideDetails {
+  return {
+    ...mapBackendRide(ride),
+    customerPhone: ride.customer?.phone ?? '-',
+    driverPhone: ride.driver?.user?.phone ?? '-',
+    tariffClass: ride.tariffClass ?? 'ECONOMY',
+    distanceKm: Math.round(((ride.distanceMeters ?? 0) / 1000) * 10) / 10,
+    waitingMinutes: ride.waitingMinutes ?? 0,
+    stopMinutes: ride.stopMinutes ?? 0,
+    paymentStatus: ride.payment?.status ?? '-',
+    paymentMethod: ride.payment?.method ?? '-',
+    statusHistory: ride.statusHistory ?? [],
   };
 }
 

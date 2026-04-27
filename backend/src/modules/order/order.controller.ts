@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
@@ -28,6 +37,24 @@ export class OrderController {
   @Roles(UserRoleValue.ADMIN)
   findActive() {
     return this.orderService.findActive();
+  }
+
+  @Get('history/passenger')
+  @Roles(UserRoleValue.PASSENGER)
+  findPassengerHistory(
+    @CurrentUser() user: AuthUser,
+    @Query('filter') filter?: string,
+  ) {
+    return this.orderService.findPassengerHistory(user, filter);
+  }
+
+  @Get('history/driver')
+  @Roles(UserRoleValue.DRIVER)
+  findDriverHistory(
+    @CurrentUser() user: AuthUser,
+    @Query('filter') filter?: string,
+  ) {
+    return this.orderService.findDriverHistory(user, filter);
   }
 
   @Get(':rideId')

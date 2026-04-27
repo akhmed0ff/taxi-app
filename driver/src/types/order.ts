@@ -26,3 +26,11 @@ export interface OrderOffer {
 export interface ActiveTrip extends OrderOffer {
   status: TripStatus;
 }
+
+export type RideHistoryFilter = 'active' | 'completed' | 'cancelled';
+
+export interface RideHistoryItem extends Omit<ActiveTrip, 'status'> {
+  status: TripStatus | 'CANCELLED';
+  createdAt?: string;
+  passengerName?: string;
+}

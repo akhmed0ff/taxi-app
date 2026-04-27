@@ -1,4 +1,9 @@
-import { DriverStatus } from '../types/order';
+import {
+  DriverStatus,
+  RideHistoryFilter,
+  RideHistoryItem,
+  TripStatus,
+} from '../types/order';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -162,6 +167,75 @@ export async function completeTrip(accessToken: string, orderId: string) {
   }
 
   return response.json();
+}
+
+export async function fetchDriverRideHistory(
+  accessToken: string,
+  filter: RideHistoryFilter = 'completed',
+): Promise<RideHistoryItem[]> {
+  const response = await fetch(`${API_URL}/orders/history/driver?filter=${filter}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to load driver history'));
+  }
+
+  const rides = (await response.json()) as BackendRide[];
+  return rides.map(mapBackendRideToHistoryItem);
+}
+
+interface BackendRide {
+  id: string;
+  status: TripStatus | 'DRIVER_ASSIGNED' | 'SEARCHING_DRIVER' | 'CANCELLED';
+  pickupLat: number;
+  pickupLng: number;
+  pickupAddress?: string;
+  dropoffLat: number;
+  dropoffLng: number;
+  dropoffAddress?: string;
+  estimatedFare?: number;
+  finalFare?: number;
+  distanceMeters?: number;
+  createdAt?: string;
+  customer?: {
+    name?: string;
+    phone?: string;
+  };
+}
+
+function mapBackendRideToHistoryItem(ride: BackendRide): RideHistoryItem {
+  return {
+    id: ride.id,
+    pickupAddress: ride.pickupAddress ?? 'Подача',
+    dropoffAddress: ride.dropoffAddress ?? 'Назначение',
+    pickup: {
+      lat: ride.pickupLat,
+      lng: ride.pickupLng,
+    },
+    dropoff: {
+      lat: ride.dropoffLat,
+      lng: ride.dropoffLng,
+    },
+    price: ride.finalFare ?? ride.estimatedFare ?? 0,
+    distanceMeters: ride.distanceMeters ?? 0,
+    expiresInSeconds: 0,
+    status: normalizeTripStatus(ride.status),
+    createdAt: ride.createdAt,
+    passengerName: ride.customer?.name ?? ride.customer?.phone,
+  };
+}
+
+function normalizeTripStatus(status: BackendRide['status']): RideHistoryItem['status'] {
+  if (status === 'DRIVER_ASSIGNED') {
+    return 'ACCEPTED';
+  }
+
+  if (status === 'SEARCHING_DRIVER') {
+    return 'OFFERED';
+  }
+
+  return status;
 }
 
 async function readError(response: Response, fallback: string) {

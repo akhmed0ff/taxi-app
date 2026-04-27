@@ -1,4 +1,11 @@
-import { Order, OrderStatus, Point, TariffClass } from '../types/order';
+import {
+  Order,
+  OrderStatus,
+  Point,
+  RideHistoryFilter,
+  RideHistoryItem,
+  TariffClass,
+} from '../types/order';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -28,6 +35,11 @@ interface BackendRide {
   estimatedFare?: number;
   finalFare?: number;
   driverId?: string;
+  tariffClass?: TariffClass;
+  createdAt?: string;
+  payment?: {
+    status: string;
+  };
 }
 
 export async function loginPassenger(phone: string): Promise<CustomerSession> {
@@ -97,6 +109,7 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
       dropoffLat: input.dropoff.lat,
       dropoffLng: input.dropoff.lng,
       dropoffAddress: input.dropoff.address,
+      tariffClass: input.tariff,
     }),
   });
 
@@ -105,6 +118,22 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
   }
 
   return mapRideToOrder(await response.json(), input.tariff);
+}
+
+export async function fetchPassengerRideHistory(
+  accessToken: string,
+  filter: RideHistoryFilter,
+): Promise<RideHistoryItem[]> {
+  const response = await fetch(`${API_URL}/orders/history/passenger?filter=${filter}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to load ride history'));
+  }
+
+  const rides = (await response.json()) as BackendRide[];
+  return rides.map((ride) => mapRideToHistoryItem(ride));
 }
 
 export function mapRideToOrder(
@@ -135,6 +164,14 @@ export function mapRideToOrder(
           etaMinutes: 4,
         }
       : undefined,
+  };
+}
+
+function mapRideToHistoryItem(ride: BackendRide): RideHistoryItem {
+  return {
+    ...mapRideToOrder(ride, ride.tariffClass ?? 'ECONOMY'),
+    createdAt: ride.createdAt,
+    paymentStatus: ride.payment?.status,
   };
 }
 

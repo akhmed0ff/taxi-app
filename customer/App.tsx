@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { CompletionScreen } from './src/screens/CompletionScreen';
 import { HomeMapScreen } from './src/screens/HomeMapScreen';
+import { HistoryScreen } from './src/screens/HistoryScreen';
 import { SearchDriverScreen } from './src/screens/SearchDriverScreen';
 import { TariffScreen } from './src/screens/TariffScreen';
 import { TripScreen } from './src/screens/TripScreen';
@@ -11,7 +12,7 @@ import { createOrder, CustomerSession, loginPassenger } from './src/services/api
 import { realtimeClient } from './src/services/realtime';
 import { Order, Point, TariffClass } from './src/types/order';
 
-type Screen = 'auth' | 'home' | 'tariff' | 'search' | 'trip' | 'complete';
+type Screen = 'auth' | 'home' | 'tariff' | 'search' | 'trip' | 'complete' | 'history';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('auth');
@@ -94,11 +95,18 @@ export default function App() {
       )}
       {screen === 'home' && (
         <HomeMapScreen
+          onOpenHistory={() => setScreen('history')}
           onRouteSelected={(nextPickup, nextDropoff) => {
             setPickup(nextPickup);
             setDropoff(nextDropoff);
             setScreen('tariff');
           }}
+        />
+      )}
+      {screen === 'history' && session && (
+        <HistoryScreen
+          accessToken={session.accessToken}
+          onBack={() => setScreen('home')}
         />
       )}
       {screen === 'tariff' && canSelectTariff && (

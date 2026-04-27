@@ -33,3 +33,10 @@ export interface Order {
   driver?: DriverPreview;
   driverLocation?: Point;
 }
+
+export type RideHistoryFilter = 'active' | 'completed' | 'cancelled';
+
+export interface RideHistoryItem extends Order {
+  createdAt?: string;
+  paymentStatus?: string;
+}
