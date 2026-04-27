@@ -35,12 +35,16 @@ export function useDriverLocationTracking({
         return;
       }
 
-      await updateDriverLocation(
-        accessToken,
-        driverId,
-        location.coords.latitude,
-        location.coords.longitude,
-      );
+      try {
+        await updateDriverLocation(
+          accessToken,
+          driverId,
+          location.coords.latitude,
+          location.coords.longitude,
+        );
+      } catch (error) {
+        console.warn(error);
+      }
     };
 
     void sendLocation();

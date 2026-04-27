@@ -22,6 +22,8 @@ export class DriverRealtimeClient {
   private socket?: Socket;
 
   connect(accessToken: string) {
+    this.disconnect();
+
     this.socket = io(SOCKET_URL, {
       transports: ['websocket'],
       auth: { accessToken },

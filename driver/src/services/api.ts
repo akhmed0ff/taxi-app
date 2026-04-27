@@ -19,7 +19,7 @@ export async function loginDriver(): Promise<DriverSession> {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to login driver');
+    throw new Error(await readError(response, 'Failed to login driver'));
   }
 
   const data = await response.json();
@@ -45,7 +45,7 @@ export async function updateDriverStatus(
   });
 
   if (!response.ok) {
-    throw new Error('Failed to update driver status');
+    throw new Error(await readError(response, 'Failed to update driver status'));
   }
 
   return response.json();
@@ -67,7 +67,7 @@ export async function updateDriverLocation(
   });
 
   if (!response.ok) {
-    throw new Error('Failed to update driver location');
+    throw new Error(await readError(response, 'Failed to update driver location'));
   }
 
   return response.json();
@@ -84,7 +84,7 @@ export async function acceptOrder(
   });
 
   if (!response.ok) {
-    throw new Error('Failed to accept order');
+    throw new Error(await readError(response, 'Failed to accept order'));
   }
 
   return response.json();
@@ -97,7 +97,7 @@ export async function markArrived(accessToken: string, orderId: string) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to mark arrived');
+    throw new Error(await readError(response, 'Failed to mark arrived'));
   }
 
   return response.json();
@@ -110,7 +110,7 @@ export async function startTrip(accessToken: string, orderId: string) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to start trip');
+    throw new Error(await readError(response, 'Failed to start trip'));
   }
 
   return response.json();
@@ -127,8 +127,13 @@ export async function completeTrip(accessToken: string, orderId: string) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to complete trip');
+    throw new Error(await readError(response, 'Failed to complete trip'));
   }
 
   return response.json();
+}
+
+async function readError(response: Response, fallback: string) {
+  const body = await response.text();
+  return body ? `${fallback}: ${body}` : fallback;
 }

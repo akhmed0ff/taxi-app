@@ -62,8 +62,13 @@ export default function App() {
     }
 
     const nextStatus = status === 'OFFLINE' ? 'ONLINE' : 'OFFLINE';
-    setStatus(nextStatus);
-    await updateDriverStatus(session.accessToken, session.driverId, nextStatus);
+
+    try {
+      await updateDriverStatus(session.accessToken, session.driverId, nextStatus);
+      setStatus(nextStatus);
+    } catch (error) {
+      console.warn(error);
+    }
   }
 
   async function handleAcceptOffer() {
@@ -72,10 +77,18 @@ export default function App() {
     }
 
     const acceptedOffer = offer;
-    await acceptOrder(session.accessToken, acceptedOffer.id, session.driverId);
-    setStatus('BUSY');
-    setTrip({ ...acceptedOffer, status: 'ACCEPTED' });
-    setScreen('navigation');
+
+    try {
+      await acceptOrder(session.accessToken, acceptedOffer.id, session.driverId);
+      setStatus('BUSY');
+      setTrip({ ...acceptedOffer, status: 'ACCEPTED' });
+      setOffer(undefined);
+      setScreen('navigation');
+    } catch (error) {
+      console.warn(error);
+      setOffer(undefined);
+      setScreen('online');
+    }
   }
 
   return (

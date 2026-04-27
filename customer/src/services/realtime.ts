@@ -19,6 +19,8 @@ export class RealtimeClient {
   private socket?: Socket;
 
   connect(accessToken: string) {
+    this.disconnect();
+
     this.socket = io(SOCKET_URL, {
       transports: ['websocket'],
       auth: { accessToken },
@@ -59,12 +61,14 @@ export class RealtimeClient {
     this.socket.on('DRIVER_LOCATION', handleLocation);
     this.socket.on('TRIP_STARTED', handleRideEvent);
     this.socket.on('TRIP_COMPLETED', handleRideEvent);
+    this.socket.on('MATCHING_FAILED', handleRideEvent);
 
     return () => {
       this.socket?.off('DRIVER_ACCEPTED', handleRideEvent);
       this.socket?.off('DRIVER_LOCATION', handleLocation);
       this.socket?.off('TRIP_STARTED', handleRideEvent);
       this.socket?.off('TRIP_COMPLETED', handleRideEvent);
+      this.socket?.off('MATCHING_FAILED', handleRideEvent);
     };
   }
 

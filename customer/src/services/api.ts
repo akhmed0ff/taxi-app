@@ -71,7 +71,7 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to create order');
+    throw new Error(await readError(response, 'Failed to create order'));
   }
 
   return mapRideToOrder(await response.json(), input.tariff);
@@ -106,4 +106,9 @@ export function mapRideToOrder(
         }
       : undefined,
   };
+}
+
+async function readError(response: Response, fallback: string) {
+  const body = await response.text();
+  return body ? `${fallback}: ${body}` : fallback;
 }

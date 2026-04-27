@@ -62,18 +62,6 @@ export default function App() {
       return;
     }
 
-    const fallbackOrder: Order = {
-      id: `order-${Date.now()}`,
-      status: 'SEARCHING_DRIVER',
-      pickup,
-      dropoff,
-      tariff,
-      price,
-    };
-
-    setOrder(fallbackOrder);
-    setScreen('search');
-
     try {
       const createdOrder = await createOrder({
         accessToken: session.accessToken,
@@ -82,9 +70,11 @@ export default function App() {
         dropoff,
         tariff,
       });
-      setOrder({ ...fallbackOrder, ...createdOrder });
-    } catch {
-      setOrder(fallbackOrder);
+      setOrder({ ...createdOrder, price: createdOrder.price || price });
+      setScreen('search');
+    } catch (error) {
+      console.warn(error);
+      setScreen('tariff');
     }
   }
 
