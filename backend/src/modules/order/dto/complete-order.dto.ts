@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { PaymentMethod, PaymentMethodValue } from '../../payment/payment-method';
 
 export class CompleteOrderDto {
@@ -6,4 +6,12 @@ export class CompleteOrderDto {
   @IsString()
   @IsIn([PaymentMethodValue.CASH, PaymentMethodValue.CARD])
   paymentMethod?: PaymentMethod;
+
+  @IsOptional()
+  @IsNumber()
+  waitingMinutes?: number;
+
+  @IsOptional()
+  @IsNumber()
+  stopMinutes?: number;
 }

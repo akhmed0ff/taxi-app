@@ -12,11 +12,14 @@ interface RideState {
   customerId: string;
   driverId: string | null;
   status: string;
+  tariffClass?: string;
   pickupLat: number;
   pickupLng: number;
   dropoffLat: number;
   dropoffLng: number;
   distanceMeters?: number;
+  waitingMinutes?: number;
+  stopMinutes?: number;
   estimatedFare?: number;
   finalFare?: number;
 }
@@ -61,6 +64,7 @@ function createCoreFlowMock() {
         customerId: data.customerId!,
         driverId: null,
         status: data.status!,
+        tariffClass: data.tariffClass,
         pickupLat: data.pickupLat!,
         pickupLng: data.pickupLng!,
         dropoffLat: data.dropoffLat!,
@@ -234,7 +238,19 @@ function createCoreFlowMock() {
   };
 
   const pricingService = {
-    calculateFare: () => 15000,
+    calculateEstimatedFare: () => 15000,
+    calculateFinalFare: () => 17000,
+    getDefaultTariff: () => ({
+      tariffClass: 'ECONOMY',
+      city: 'Angren',
+      baseFare: 7000,
+      perKm: 2000,
+      freeWaitingMinutes: 3,
+      waitingPerMinute: 500,
+      stopPerMinute: 500,
+      minimumFare: 12000,
+      active: true,
+    }),
   };
 
   const redis = {
@@ -309,10 +325,18 @@ async function testLifecycleCreatesPendingPayment() {
 
   const completed = await service.completeTrip(
     createdRide.id,
-    PaymentMethodValue.CASH,
+    {
+      paymentMethod: PaymentMethodValue.CASH,
+      waitingMinutes: 5,
+      stopMinutes: 2,
+    },
     driverUser,
   );
   assert.equal(completed.ride.status, OrderStatusValue.COMPLETED);
+  assert.equal(completed.ride.finalFare, 17000);
+  assert.equal(completed.ride.waitingMinutes, 5);
+  assert.equal(completed.ride.stopMinutes, 2);
+  assert.equal(completed.payment.amount, 17000);
   assert.equal(completed.payment.status, PaymentStatusValue.PENDING);
   assert.equal(state.payments.length, 1);
   assert.equal(state.drivers.get('driver-1')?.status, DriverStatusValue.ONLINE);

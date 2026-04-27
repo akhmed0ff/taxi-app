@@ -16,16 +16,18 @@ import { DriverStatusValue } from '../driver/driver-status';
 import { PaymentMethod, PaymentMethodValue } from '../payment/payment-method';
 import { PaymentService } from '../payment/payment.service';
 import { PricingService } from '../pricing/pricing.service';
+import {
+  DEFAULT_TARIFF_CLASS,
+  TariffClass,
+} from '../pricing/tariff-class';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { ORDER_STATUS_FLOW, OrderStatus, OrderStatusValue } from './order-status';
 
-const FALLBACK_TARIFF = {
-  baseFare: 8000,
-  perKm: 2500,
-  perMinute: 400,
-  surgeMultiplier: 1,
-  minimumFare: 12000,
-};
+interface CompleteTripInput {
+  paymentMethod?: PaymentMethod;
+  waitingMinutes?: number;
+  stopMinutes?: number;
+}
 
 @Injectable()
 export class OrderService {
@@ -44,6 +46,7 @@ export class OrderService {
     const ride = await this.prisma.ride.create({
       data: {
         customerId: dto.customerId,
+        tariffClass: dto.tariffClass ?? DEFAULT_TARIFF_CLASS,
         pickupLat: dto.pickupLat,
         pickupLng: dto.pickupLng,
         pickupAddress: dto.pickupAddress,
@@ -195,22 +198,37 @@ export class OrderService {
 
   async completeTrip(
     rideId: string,
-    paymentMethod: PaymentMethod = PaymentMethodValue.CASH,
+    input: PaymentMethod | CompleteTripInput = PaymentMethodValue.CASH,
     user?: AuthUser,
   ) {
     await this.assertRideDriverAccess(rideId, user);
     const currentRide = await this.findOne(rideId);
-    const finalFare = currentRide.finalFare ?? currentRide.estimatedFare ?? 0;
+    const completeInput =
+      typeof input === 'string' ? { paymentMethod: input } : input;
+    const distanceKm = (currentRide.distanceMeters ?? 0) / 1000;
+    const tariff = await this.getActiveTariff(
+      (currentRide.tariffClass as TariffClass) ?? DEFAULT_TARIFF_CLASS,
+    );
+    const waitingMinutes = completeInput.waitingMinutes ?? 0;
+    const stopMinutes = completeInput.stopMinutes ?? 0;
+    const finalFare = this.pricingService.calculateFinalFare({
+      tariff,
+      distanceKm,
+      waitingMinutes,
+      stopMinutes,
+    });
 
     const ride = await this.transitionRide(rideId, OrderStatusValue.COMPLETED, {
       finalFare,
+      waitingMinutes,
+      stopMinutes,
     });
 
     const payment = await this.paymentService.createPendingPayment(
       ride.id,
       ride.customerId,
       finalFare,
-      paymentMethod,
+      completeInput.paymentMethod ?? PaymentMethodValue.CASH,
     );
 
     if (ride.driverId) {
@@ -253,7 +271,12 @@ export class OrderService {
   private async transitionRide(
     rideId: string,
     nextStatus: OrderStatus,
-    extraData: { driverId?: string; finalFare?: number } = {},
+    extraData: {
+      driverId?: string;
+      finalFare?: number;
+      waitingMinutes?: number;
+      stopMinutes?: number;
+    } = {},
   ) {
     const ride = await this.prisma.ride.findUnique({ where: { id: rideId } });
 
@@ -329,35 +352,31 @@ export class OrderService {
       dto.dropoffLng,
     );
     const distanceKm = distanceMeters / 1000;
-    const durationMinutes = Math.max(4, Math.round((distanceKm / 35) * 60));
-    const tariff = await this.getActiveTariff();
+    const tariff = await this.getActiveTariff(
+      dto.tariffClass ?? DEFAULT_TARIFF_CLASS,
+    );
 
     return {
       distanceMeters,
-      durationMinutes,
-      fare: this.pricingService.calculateFare({
-        baseFare: tariff.baseFare,
+      fare: this.pricingService.calculateEstimatedFare({
+        tariff,
         distanceKm,
-        durationMinutes,
-        pricePerKm: tariff.perKm,
-        pricePerMinute: tariff.perMinute,
-        surgeMultiplier: tariff.surgeMultiplier,
-        minimumFare: tariff.minimumFare,
       }),
     };
   }
 
-  private async getActiveTariff() {
-    const cacheKey = 'tariff:active';
+  private async getActiveTariff(tariffClass: TariffClass) {
+    const cacheKey = `tariff:${tariffClass}:active`;
     const cached = await this.redis.client.get(cacheKey);
 
     if (cached) {
-      return JSON.parse(cached) as typeof FALLBACK_TARIFF;
+      return JSON.parse(cached) as ReturnType<PricingService['getDefaultTariff']>;
     }
 
     const tariff =
-      (await this.prisma.tariff.findFirst({ where: { active: true } })) ??
-      FALLBACK_TARIFF;
+      (await this.prisma.tariff.findFirst({
+        where: { active: true, tariffClass },
+      })) ?? this.pricingService.getDefaultTariff(tariffClass);
 
     await this.redis.client.set(cacheKey, JSON.stringify(tariff), 'EX', 60);
     return tariff;

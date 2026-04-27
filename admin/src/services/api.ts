@@ -50,10 +50,12 @@ interface BackendRide {
 interface BackendTariff {
   id: string;
   city: string;
+  tariffClass: string;
   baseFare: number;
   perKm: number;
-  perMinute: number;
-  surgeMultiplier: number;
+  freeWaitingMinutes: number;
+  waitingPerMinute: number;
+  stopPerMinute: number;
   minimumFare: number;
   active: boolean;
 }
@@ -80,11 +82,13 @@ export async function saveTariff(tariff: AdminTariff) {
     method: 'PATCH',
     body: JSON.stringify({
       city: tariff.name,
+      tariffClass: normalizeTariffClass(tariff.name),
       baseFare: tariff.baseFare,
       perKm: tariff.perKm,
-      perMinute: tariff.perMinute,
-      surgeMultiplier: tariff.surge,
-      minimumFare: tariff.baseFare,
+      freeWaitingMinutes: 3,
+      waitingPerMinute: tariff.perMinute,
+      stopPerMinute: 500,
+      minimumFare: Math.max(tariff.baseFare, 12000),
       active: tariff.active,
     }),
   });
@@ -203,13 +207,27 @@ function mapBackendRide(ride: BackendRide): AdminOrder {
 function mapBackendTariff(tariff: BackendTariff): AdminTariff {
   return {
     key: tariff.id,
-    name: tariff.city,
+    name: tariff.tariffClass,
     baseFare: tariff.baseFare,
     perKm: tariff.perKm,
-    perMinute: tariff.perMinute,
-    surge: tariff.surgeMultiplier,
+    perMinute: tariff.waitingPerMinute,
+    surge: 1,
     active: tariff.active,
   };
+}
+
+function normalizeTariffClass(name: string) {
+  const value = name.toUpperCase();
+
+  if (value.includes('COMFORT') || value.includes('КОМФОРТ')) {
+    return 'COMFORT';
+  }
+
+  if (value.includes('PREMIUM') || value.includes('ПРЕМИУМ')) {
+    return 'PREMIUM';
+  }
+
+  return 'ECONOMY';
 }
 
 function formatVehicle(vehicle?: BackendVehicle) {

@@ -1,4 +1,9 @@
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  DEFAULT_TARIFF_CLASS,
+  TariffClass,
+  TariffClassValue,
+} from '../../pricing/tariff-class';
 
 export class CreateOrderDto {
   @IsString()
@@ -23,4 +28,9 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   dropoffAddress?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([TariffClassValue.ECONOMY, TariffClassValue.COMFORT, TariffClassValue.PREMIUM])
+  tariffClass?: TariffClass = DEFAULT_TARIFF_CLASS;
 }

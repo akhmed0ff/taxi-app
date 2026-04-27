@@ -1,8 +1,14 @@
-import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
+import { TariffClassValue } from '../tariff-class';
 
 export class UpsertTariffDto {
   @IsString()
-  city: string;
+  @IsIn([TariffClassValue.ECONOMY, TariffClassValue.COMFORT, TariffClassValue.PREMIUM])
+  tariffClass: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
 
   @IsNumber()
   baseFare: number;
@@ -11,10 +17,13 @@ export class UpsertTariffDto {
   perKm: number;
 
   @IsNumber()
-  perMinute: number;
+  freeWaitingMinutes: number;
 
   @IsNumber()
-  surgeMultiplier: number;
+  waitingPerMinute: number;
+
+  @IsNumber()
+  stopPerMinute: number;
 
   @IsNumber()
   minimumFare: number;

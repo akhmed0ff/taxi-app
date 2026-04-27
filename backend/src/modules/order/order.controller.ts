@@ -65,7 +65,15 @@ export class OrderController {
     @Body() dto: CompleteOrderDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.orderService.completeTrip(rideId, dto.paymentMethod, user);
+    return this.orderService.completeTrip(
+      rideId,
+      {
+        paymentMethod: dto.paymentMethod,
+        waitingMinutes: dto.waitingMinutes,
+        stopMinutes: dto.stopMinutes,
+      },
+      user,
+    );
   }
 
   @Patch(':rideId/pay')

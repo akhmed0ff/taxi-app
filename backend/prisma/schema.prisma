@@ -78,6 +78,7 @@ model Ride {
   customerId     String
   driverId       String?
   status         String     @default("CREATED")
+  tariffClass    String     @default("ECONOMY")
   pickupLat      Float
   pickupLng      Float
   pickupAddress  String?
@@ -85,6 +86,8 @@ model Ride {
   dropoffLng     Float
   dropoffAddress String?
   distanceMeters Int?
+  waitingMinutes Int        @default(0)
+  stopMinutes    Int        @default(0)
   estimatedFare  Int?
   finalFare      Int?
   createdAt      DateTime   @default(now())
@@ -123,14 +126,16 @@ model Payment {
 }
 
 model Tariff {
-  id             String   @id @default(cuid())
-  city           String
-  baseFare       Int
-  perKm          Int
-  perMinute      Int
-  surgeMultiplier Float   @default(1)
-  minimumFare    Int
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  city               String   @default("Angren")
+  tariffClass        String
+  baseFare           Int
+  perKm              Int      @default(2000)
+  freeWaitingMinutes Int      @default(3)
+  waitingPerMinute   Int      @default(500)
+  stopPerMinute      Int      @default(500)
+  minimumFare        Int
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }

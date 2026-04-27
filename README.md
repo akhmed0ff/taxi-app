@@ -167,6 +167,7 @@ docker compose up -d --build
 - Roadmap: [docs/roadmap.md](docs/roadmap.md)
 - Auth: [docs/auth.md](docs/auth.md)
 - Matching: [docs/matching.md](docs/matching.md)
+- Pricing: [docs/pricing.md](docs/pricing.md)
 - Деплой: [docs/deployment.md](docs/deployment.md)
 
 ## CI/CD
