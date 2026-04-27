@@ -1,0 +1,202 @@
+# Architecture
+
+## 0. System Model
+
+The taxi aggregator is split into five subsystems:
+
+- `backend` - core business logic and integrations
+- `customer` - passenger mobile app
+- `driver` - driver mobile app
+- `admin` - admin and dispatcher panel
+- `web` - browser client version
+
+All subsystems communicate through three channels:
+
+- HTTP API - commands, queries, profile data, order lifecycle actions
+- WebSocket - realtime order, driver, location and status updates
+- Queue - background jobs, matching, notifications, cleanup and analytics
+
+## Backend
+
+Stack:
+
+- NestJS
+- PostgreSQL
+- Redis
+- Socket.IO
+- BullMQ
+
+Backend structure:
+
+```text
+backend/src/
+  modules/
+    auth/
+    user/
+    driver/
+    order/
+    pricing/
+    payment/
+  infrastructure/
+    db/
+    redis/
+    queue/
+    socket/
+  common/
+```
+
+Main rule: controllers do not contain business logic. Controllers receive input and delegate to module services.
+
+## Key Services
+
+Auth Service:
+
+- JWT access token
+- refresh token storage
+- roles: `PASSENGER`, `DRIVER`, `ADMIN`
+
+Driver Service:
+
+- online/offline status
+- current geolocation through Redis GEO
+- rating
+
+Order Service:
+
+- order creation
+- order state machine
+
+Order states:
+
+```text
+CREATED
+  -> SEARCHING_DRIVER
+  -> DRIVER_ASSIGNED
+  -> DRIVER_ARRIVED
+  -> IN_PROGRESS
+  -> COMPLETED
+  -> CANCELLED
+```
+
+Matching Engine:
+
+- takes order pickup coordinates
+- searches drivers through Redis GEO
+- sorts nearest drivers
+- sends offers in batches
+- falls back if nobody accepts
+
+Pricing Service:
+
+- base fare
+- price per km
+- price per minute
+- dynamic surge multiplier
+
+Payment Service:
+
+- cash/card payment modes
+- commission calculation
+
+## Realtime
+
+Socket rooms:
+
+- `driver:{id}`
+- `passenger:{id}`
+- `order:{id}`
+
+Events:
+
+- `NEW_ORDER`
+- `DRIVER_ACCEPTED`
+- `DRIVER_LOCATION`
+- `TRIP_STARTED`
+- `TRIP_COMPLETED`
+
+## Queues
+
+BullMQ queues:
+
+- driver matching
+- notifications
+- price recalculation
+
+## Order Lifecycle
+
+Full lifecycle:
+
+```text
+POST /orders
+  -> backend estimates distance and fare
+  -> ride status SEARCHING_DRIVER
+  -> job ride-matching/find-driver
+  -> matching emits NEW_ORDER to nearby driver rooms
+
+PATCH /orders/:rideId/accept/:driverId
+  -> ride status DRIVER_ASSIGNED
+  -> driver status BUSY
+  -> emits DRIVER_ACCEPTED
+
+PATCH /orders/:rideId/arrive
+  -> ride status DRIVER_ARRIVED
+
+PATCH /orders/:rideId/start
+  -> ride status IN_PROGRESS
+  -> emits TRIP_STARTED
+
+PATCH /drivers/:driverId/location
+  -> updates Redis GEO
+  -> emits DRIVER_LOCATION to order room while ride is active
+
+PATCH /orders/:rideId/complete
+  -> ride status COMPLETED
+  -> creates pending payment
+  -> driver status ONLINE
+  -> emits TRIP_COMPLETED
+
+PATCH /orders/:rideId/pay
+  -> payment status PAID
+  -> emits PAYMENT_COMPLETED
+```
+
+## Production Baseline
+
+Reliability:
+
+- BullMQ jobs use retry with exponential backoff.
+- Ride matching expands the search radius on each retry.
+- If no driver is found after all attempts, the ride is cancelled with `NO_DRIVERS_AVAILABLE` and the passenger receives `MATCHING_FAILED`.
+
+Speed:
+
+- Driver geo is stored in Redis GEO, not queried from Postgres.
+- Active tariff lookup is cached in Redis for short periods to avoid hitting DB on every order estimate.
+
+State control:
+
+- Ride status transitions are validated through `ORDER_STATUS_FLOW`.
+- Invalid transitions return a bad request instead of mutating the ride.
+
+Scalability:
+
+- Backend instances are stateless.
+- Shared runtime state lives in Postgres, Redis, Socket.IO rooms and BullMQ queues.
+- Multiple backend containers can run behind a reverse proxy when Socket.IO sticky sessions or a Redis adapter are configured.
+
+Observability:
+
+- `GET /health` checks API, database and Redis.
+- `GET /metrics` exposes Prometheus-style HTTP counters and uptime.
+- HTTP requests are logged with method, route, status and duration.
+
+## Geo
+
+Redis GEO commands:
+
+```text
+GEOADD drivers lng lat driverId
+GEORADIUS drivers ...
+```
+
+In implementation, modern Redis clients may use `GEOSEARCH` instead of deprecated `GEORADIUS`.

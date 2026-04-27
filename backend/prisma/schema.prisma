@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  phone        String   @unique
+  name         String?
+  role         String   @default("PASSENGER")
+  passwordHash String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  driverProfile Driver?
+  customerRides Ride[]   @relation("CustomerRides")
+  payments      Payment[]
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Driver {
+  id        String       @id @default(cuid())
+  userId    String       @unique
+  status    String       @default("OFFLINE")
+  rating    Float        @default(5)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user      User             @relation(fields: [userId], references: [id])
+  vehicle   Vehicle?
+  documents DriverDocument[]
+  rides     Ride[]           @relation("DriverRides")
+}
+
+model Vehicle {
+  id          String   @id @default(cuid())
+  driverId    String   @unique
+  make        String
+  model       String
+  color       String
+  plateNumber String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  driver Driver @relation(fields: [driverId], references: [id])
+}
+
+model DriverDocument {
+  id        String   @id @default(cuid())
+  driverId  String
+  type      String
+  fileUrl   String
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  driver Driver @relation(fields: [driverId], references: [id])
+}
+
+model Ride {
+  id             String     @id @default(cuid())
+  customerId     String
+  driverId       String?
+  status         String     @default("CREATED")
+  pickupLat      Float
+  pickupLng      Float
+  pickupAddress  String?
+  dropoffLat     Float
+  dropoffLng     Float
+  dropoffAddress String?
+  distanceMeters Int?
+  estimatedFare  Int?
+  finalFare      Int?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  customer      User                @relation("CustomerRides", fields: [customerId], references: [id])
+  driver        Driver?             @relation("DriverRides", fields: [driverId], references: [id])
+  statusHistory RideStatusHistory[]
+  payment       Payment?
+}
+
+model RideStatusHistory {
+  id        String     @id @default(cuid())
+  rideId    String
+  status    String
+  reason    String?
+  createdAt DateTime   @default(now())
+
+  ride Ride @relation(fields: [rideId], references: [id])
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  rideId    String        @unique
+  userId    String
+  amount    Int
+  currency  String        @default("UZS")
+  method    String        @default("CASH")
+  commissionAmount Int    @default(0)
+  status    String        @default("PENDING")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  ride Ride @relation(fields: [rideId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Tariff {
+  id             String   @id @default(cuid())
+  city           String
+  baseFare       Int
+  perKm          Int
+  perMinute      Int
+  surgeMultiplier Float   @default(1)
+  minimumFare    Int
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}

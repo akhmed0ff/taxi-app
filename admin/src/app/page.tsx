@@ -1,0 +1,84 @@
+'use client';
+
+import { Alert, Card, Col, List, Row, Space, Tag, Typography } from 'antd';
+import { ActiveOrdersTable } from '@/components/ActiveOrdersTable';
+import { AdminShell } from '@/components/AdminShell';
+import { MetricCard } from '@/components/MetricCard';
+import { OrdersMap } from '@/components/OrdersMap';
+import { activeOrders, analytics, formatSom, statusLabels } from '@/data/mock';
+
+export default function MonitoringPage() {
+  const searchingOrders = activeOrders.filter(
+    (order) => order.status === 'SEARCHING_DRIVER',
+  );
+
+  return (
+    <AdminShell>
+      <Space direction="vertical" size={20} style={{ width: '100%' }}>
+        <div>
+          <Typography.Title level={2} style={{ margin: 0 }}>
+            Мониторинг заказов
+          </Typography.Title>
+          <Typography.Text type="secondary">
+            Активные поездки, карта водителей и очередь назначений.
+          </Typography.Text>
+        </div>
+
+        <Row gutter={[16, 16]}>
+          <Col xs={24} md={12} xl={6}>
+            <MetricCard title="Поездки сегодня" value={analytics.tripsToday} />
+          </Col>
+          <Col xs={24} md={12} xl={6}>
+            <MetricCard title="Доход" value={analytics.revenueToday} suffix="сум" />
+          </Col>
+          <Col xs={24} md={12} xl={6}>
+            <MetricCard title="Водители онлайн" value={analytics.activeDrivers} />
+          </Col>
+          <Col xs={24} md={12} xl={6}>
+            <MetricCard title="Завершение" value={analytics.completionRate} suffix="%" />
+          </Col>
+        </Row>
+
+        {searchingOrders.length > 0 && (
+          <Alert
+            message={`${searchingOrders.length} заказ ожидает назначения водителя`}
+            description="Проверьте ближайших свободных водителей или увеличьте коэффициент спроса для зоны."
+            type="warning"
+            showIcon
+          />
+        )}
+
+        <Row gutter={[16, 16]}>
+          <Col xs={24} xl={16}>
+            <OrdersMap />
+          </Col>
+          <Col xs={24} xl={8}>
+            <Card title="Очередь диспетчера">
+              <List
+                dataSource={activeOrders}
+                renderItem={(order) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      title={
+                        <Space>
+                          <Typography.Text strong>{order.id}</Typography.Text>
+                          <Tag>{statusLabels[order.status]}</Tag>
+                        </Space>
+                      }
+                      description={`${order.pickup} -> ${order.destination}`}
+                    />
+                    <Typography.Text strong>{formatSom(order.fare)}</Typography.Text>
+                  </List.Item>
+                )}
+              />
+            </Card>
+          </Col>
+        </Row>
+
+        <Card title="Активные поездки">
+          <ActiveOrdersTable />
+        </Card>
+      </Space>
+    </AdminShell>
+  );
+}
