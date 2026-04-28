@@ -89,7 +89,9 @@ model Ride {
   waitingMinutes Int        @default(0)
   stopMinutes    Int        @default(0)
   estimatedFare  Int?
+  estimatedFareDetails Json?
   finalFare      Int?
+  finalFareDetails Json?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

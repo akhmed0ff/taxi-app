@@ -25,6 +25,24 @@ export interface FinalFareInput extends EstimateFareInput {
   stopMinutes?: number;
 }
 
+export interface FareBreakdown {
+  tariffClass: string;
+  currency: 'UZS';
+  distanceKm: number;
+  baseFare: number;
+  distanceFare: number;
+  freeWaitingMinutes: number;
+  waitingMinutes: number;
+  paidWaitingMinutes: number;
+  waitingFare: number;
+  stopMinutes: number;
+  stopFare: number;
+  subtotal: number;
+  minimumFare: number;
+  minimumFareAdjustment: number;
+  total: number;
+}
+
 export const DEFAULT_ANGREN_TARIFFS: Record<TariffClass, AngrenTariff> = {
   ECONOMY: {
     tariffClass: TariffClassValue.ECONOMY,
@@ -66,26 +84,56 @@ export class PricingService {
   constructor(private readonly prisma: PrismaService) {}
 
   calculateEstimatedFare(input: EstimateFareInput) {
-    return this.applyMinimumFare(
-      input.tariff.baseFare + input.distanceKm * input.tariff.perKm,
-      input.tariff.minimumFare,
-    );
+    return this.calculateEstimatedFareDetails(input).total;
   }
 
   calculateFinalFare(input: FinalFareInput) {
+    return this.calculateFinalFareDetails(input).total;
+  }
+
+  calculateEstimatedFareDetails(input: EstimateFareInput): FareBreakdown {
+    return this.buildFareBreakdown({
+      ...input,
+      waitingMinutes: 0,
+      stopMinutes: 0,
+    });
+  }
+
+  calculateFinalFareDetails(input: FinalFareInput): FareBreakdown {
+    return this.buildFareBreakdown(input);
+  }
+
+  private buildFareBreakdown(input: FinalFareInput): FareBreakdown {
     const waitingMinutes = input.waitingMinutes ?? 0;
     const stopMinutes = input.stopMinutes ?? 0;
     const paidWaitingMinutes = Math.max(
       0,
       waitingMinutes - input.tariff.freeWaitingMinutes,
     );
-    const rawFare =
-      input.tariff.baseFare +
-      input.distanceKm * input.tariff.perKm +
-      paidWaitingMinutes * input.tariff.waitingPerMinute +
-      stopMinutes * input.tariff.stopPerMinute;
+    const distanceFare = Math.round(input.distanceKm * input.tariff.perKm);
+    const waitingFare = paidWaitingMinutes * input.tariff.waitingPerMinute;
+    const stopFare = stopMinutes * input.tariff.stopPerMinute;
+    const subtotal =
+      input.tariff.baseFare + distanceFare + waitingFare + stopFare;
+    const total = this.applyMinimumFare(subtotal, input.tariff.minimumFare);
 
-    return this.applyMinimumFare(rawFare, input.tariff.minimumFare);
+    return {
+      tariffClass: input.tariff.tariffClass,
+      currency: 'UZS',
+      distanceKm: roundMoneyInput(input.distanceKm),
+      baseFare: input.tariff.baseFare,
+      distanceFare,
+      freeWaitingMinutes: input.tariff.freeWaitingMinutes,
+      waitingMinutes,
+      paidWaitingMinutes,
+      waitingFare,
+      stopMinutes,
+      stopFare,
+      subtotal,
+      minimumFare: input.tariff.minimumFare,
+      minimumFareAdjustment: total - subtotal,
+      total,
+    };
   }
 
   findTariffs() {
@@ -127,4 +175,8 @@ export class PricingService {
   private applyMinimumFare(rawFare: number, minimumFare: number) {
     return Math.max(Math.round(rawFare), minimumFare);
   }
+}
+
+function roundMoneyInput(value: number) {
+  return Math.round(value * 100) / 100;
 }

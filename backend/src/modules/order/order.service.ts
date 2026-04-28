@@ -1,4 +1,5 @@
 import { InjectQueue } from '@nestjs/bullmq';
+import { Prisma } from '@prisma/client';
 import {
   BadRequestException,
   ForbiddenException,
@@ -56,6 +57,7 @@ export class OrderService {
         dropoffAddress: dto.dropoffAddress,
         distanceMeters: estimate.distanceMeters,
         estimatedFare: estimate.fare,
+        estimatedFareDetails: estimate.details as unknown as Prisma.InputJsonValue,
         status: OrderStatusValue.SEARCHING_DRIVER,
         statusHistory: {
           create: [
@@ -266,7 +268,7 @@ export class OrderService {
     );
     const waitingMinutes = completeInput.waitingMinutes ?? 0;
     const stopMinutes = completeInput.stopMinutes ?? 0;
-    const finalFare = this.pricingService.calculateFinalFare({
+    const finalFareDetails = this.pricingService.calculateFinalFareDetails({
       tariff,
       distanceKm,
       waitingMinutes,
@@ -274,7 +276,8 @@ export class OrderService {
     });
 
     const ride = await this.transitionRide(rideId, OrderStatusValue.COMPLETED, {
-      finalFare,
+      finalFare: finalFareDetails.total,
+      finalFareDetails: finalFareDetails as unknown as Prisma.InputJsonValue,
       waitingMinutes,
       stopMinutes,
     });
@@ -282,7 +285,7 @@ export class OrderService {
     const payment = await this.paymentService.createPendingPayment(
       ride.id,
       ride.customerId,
-      finalFare,
+      finalFareDetails.total,
       completeInput.paymentMethod ?? PaymentMethodValue.CASH,
     );
 
@@ -380,8 +383,8 @@ export class OrderService {
     rideId: string,
     nextStatus: OrderStatus,
     extraData: {
-      driverId?: string;
       finalFare?: number;
+      finalFareDetails?: Prisma.InputJsonValue;
       waitingMinutes?: number;
       stopMinutes?: number;
     } = {},
@@ -507,12 +510,15 @@ export class OrderService {
       dto.tariffClass ?? DEFAULT_TARIFF_CLASS,
     );
 
+    const details = this.pricingService.calculateEstimatedFareDetails({
+      tariff,
+      distanceKm,
+    });
+
     return {
       distanceMeters,
-      fare: this.pricingService.calculateEstimatedFare({
-        tariff,
-        distanceKm,
-      }),
+      fare: details.total,
+      details,
     };
   }
 

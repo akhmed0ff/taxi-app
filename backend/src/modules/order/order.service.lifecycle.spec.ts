@@ -21,7 +21,9 @@ interface RideState {
   waitingMinutes?: number;
   stopMinutes?: number;
   estimatedFare?: number;
+  estimatedFareDetails?: unknown;
   finalFare?: number;
+  finalFareDetails?: unknown;
 }
 
 interface DriverState {
@@ -71,6 +73,7 @@ function createCoreFlowMock() {
         dropoffLng: data.dropoffLng!,
         distanceMeters: data.distanceMeters,
         estimatedFare: data.estimatedFare,
+        estimatedFareDetails: data.estimatedFareDetails,
       };
 
       state.rides.set(ride.id, ride);
@@ -252,6 +255,20 @@ function createCoreFlowMock() {
   const pricingService = {
     calculateEstimatedFare: () => 15000,
     calculateFinalFare: () => 17000,
+    calculateEstimatedFareDetails: () => ({
+      total: 15000,
+      subtotal: 15000,
+      distanceFare: 8000,
+      waitingFare: 0,
+      stopFare: 0,
+    }),
+    calculateFinalFareDetails: () => ({
+      total: 17000,
+      subtotal: 17000,
+      distanceFare: 8000,
+      waitingFare: 1000,
+      stopFare: 1000,
+    }),
     getDefaultTariff: () => ({
       tariffClass: 'ECONOMY',
       city: 'Angren',
@@ -328,6 +345,13 @@ async function testLifecycleCreatesPendingPayment() {
     dropoffLng: 70.16,
   });
   assert.equal(createdRide.status, OrderStatusValue.SEARCHING_DRIVER);
+  assert.deepEqual(createdRide.estimatedFareDetails, {
+    total: 15000,
+    subtotal: 15000,
+    distanceFare: 8000,
+    waitingFare: 0,
+    stopFare: 0,
+  });
   assert.equal(state.queuedJobs.length, 1);
 
   const acceptedRide = await service.accept(createdRide.id, 'driver-1', driverUser);
@@ -351,6 +375,13 @@ async function testLifecycleCreatesPendingPayment() {
   );
   assert.equal(completed.ride.status, OrderStatusValue.COMPLETED);
   assert.equal(completed.ride.finalFare, 17000);
+  assert.deepEqual(completed.ride.finalFareDetails, {
+    total: 17000,
+    subtotal: 17000,
+    distanceFare: 8000,
+    waitingFare: 1000,
+    stopFare: 1000,
+  });
   assert.equal(completed.ride.waitingMinutes, 5);
   assert.equal(completed.ride.stopMinutes, 2);
   assert.equal(completed.payment.amount, 17000);
