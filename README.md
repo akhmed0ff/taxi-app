@@ -38,7 +38,7 @@ docs/      архитектура, деплой и roadmap
 - Мобильный UI поддерживает русский и узбекский языки; по умолчанию русский
 - Админ-панель для мониторинга, водителей, тарифов и аналитики
 - Health и metrics endpoints: `/health`, `/metrics`
-- Базовая Docker и CI/CD инфраструктура
+- Docker Compose production setup: backend, admin, Postgres, Redis, healthchecks, Docker log rotation, Nginx reverse proxy example and Certbot deployment notes
 
 ## Быстрый старт
 
