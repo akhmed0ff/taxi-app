@@ -52,6 +52,7 @@ services:
         ]
       interval: 30s
       timeout: 10s
+      start_period: 30s
       retries: 3
     depends_on:
       postgres:
@@ -62,9 +63,15 @@ services:
   admin:
     build:
       context: ./admin
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+        NEXT_PUBLIC_ADMIN_PHONE: ${NEXT_PUBLIC_ADMIN_PHONE:-+998900000001}
+        NEXT_PUBLIC_ADMIN_PASSWORD: ${NEXT_PUBLIC_ADMIN_PASSWORD:-password123}
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      NEXT_PUBLIC_ADMIN_PHONE: ${NEXT_PUBLIC_ADMIN_PHONE:-+998900000001}
+      NEXT_PUBLIC_ADMIN_PASSWORD: ${NEXT_PUBLIC_ADMIN_PASSWORD:-password123}
       PORT: 3000
     ports:
       - "${ADMIN_PORT:-3001}:3000"
