@@ -258,16 +258,18 @@ function createCoreFlowMock() {
     calculateEstimatedFareDetails: () => ({
       total: 15000,
       subtotal: 15000,
-      distanceFare: 8000,
-      waitingFare: 0,
-      stopFare: 0,
+      baseFareAmount: 7000,
+      distanceAmount: 8000,
+      waitingAmount: 0,
+      stopAmount: 0,
     }),
     calculateFinalFareDetails: () => ({
       total: 17000,
       subtotal: 17000,
-      distanceFare: 8000,
-      waitingFare: 1000,
-      stopFare: 1000,
+      baseFareAmount: 7000,
+      distanceAmount: 8000,
+      waitingAmount: 1000,
+      stopAmount: 1000,
     }),
     getDefaultTariff: () => ({
       tariffClass: 'ECONOMY',
@@ -348,9 +350,10 @@ async function testLifecycleCreatesPendingPayment() {
   assert.deepEqual(createdRide.estimatedFareDetails, {
     total: 15000,
     subtotal: 15000,
-    distanceFare: 8000,
-    waitingFare: 0,
-    stopFare: 0,
+    baseFareAmount: 7000,
+    distanceAmount: 8000,
+    waitingAmount: 0,
+    stopAmount: 0,
   });
   assert.equal(state.queuedJobs.length, 1);
 
@@ -378,9 +381,10 @@ async function testLifecycleCreatesPendingPayment() {
   assert.deepEqual(completed.ride.finalFareDetails, {
     total: 17000,
     subtotal: 17000,
-    distanceFare: 8000,
-    waitingFare: 1000,
-    stopFare: 1000,
+    baseFareAmount: 7000,
+    distanceAmount: 8000,
+    waitingAmount: 1000,
+    stopAmount: 1000,
   });
   assert.equal(completed.ride.waitingMinutes, 5);
   assert.equal(completed.ride.stopMinutes, 2);

@@ -29,14 +29,14 @@ export interface FareBreakdown {
   tariffClass: string;
   currency: 'UZS';
   distanceKm: number;
-  baseFare: number;
-  distanceFare: number;
+  baseFareAmount: number;
+  distanceAmount: number;
   freeWaitingMinutes: number;
   waitingMinutes: number;
   paidWaitingMinutes: number;
-  waitingFare: number;
+  waitingAmount: number;
   stopMinutes: number;
-  stopFare: number;
+  stopAmount: number;
   subtotal: number;
   minimumFare: number;
   minimumFareAdjustment: number;
@@ -110,25 +110,26 @@ export class PricingService {
       0,
       waitingMinutes - input.tariff.freeWaitingMinutes,
     );
-    const distanceFare = Math.round(input.distanceKm * input.tariff.perKm);
-    const waitingFare = paidWaitingMinutes * input.tariff.waitingPerMinute;
-    const stopFare = stopMinutes * input.tariff.stopPerMinute;
+    const baseFareAmount = input.tariff.baseFare;
+    const distanceAmount = Math.round(input.distanceKm * input.tariff.perKm);
+    const waitingAmount = paidWaitingMinutes * input.tariff.waitingPerMinute;
+    const stopAmount = stopMinutes * input.tariff.stopPerMinute;
     const subtotal =
-      input.tariff.baseFare + distanceFare + waitingFare + stopFare;
+      baseFareAmount + distanceAmount + waitingAmount + stopAmount;
     const total = this.applyMinimumFare(subtotal, input.tariff.minimumFare);
 
     return {
       tariffClass: input.tariff.tariffClass,
       currency: 'UZS',
       distanceKm: roundMoneyInput(input.distanceKm),
-      baseFare: input.tariff.baseFare,
-      distanceFare,
+      baseFareAmount,
+      distanceAmount,
       freeWaitingMinutes: input.tariff.freeWaitingMinutes,
       waitingMinutes,
       paidWaitingMinutes,
-      waitingFare,
+      waitingAmount,
       stopMinutes,
-      stopFare,
+      stopAmount,
       subtotal,
       minimumFare: input.tariff.minimumFare,
       minimumFareAdjustment: total - subtotal,

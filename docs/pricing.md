@@ -10,6 +10,14 @@ Supported classes:
 - `COMFORT`
 - `PREMIUM`
 
+Default ANGREN TAXI tariffs:
+
+| Class | baseFare | perKm | freeWaitingMinutes | waitingPerMinute | stopPerMinute | minimumFare |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `ECONOMY` | 7000 | 2000 | 3 | 500 | 500 | 12000 |
+| `COMFORT` | 10000 | 2500 | 3 | 500 | 500 | 16000 |
+| `PREMIUM` | 15000 | 3500 | 3 | 500 | 500 | 25000 |
+
 Each tariff stores:
 
 - `baseFare`
@@ -32,7 +40,7 @@ Estimated fare is calculated when a ride is created:
 
 ```text
 estimatedFare = max(
-  baseFare + distanceKm * perKm,
+  baseFareAmount + distanceAmount,
   minimumFare
 )
 ```
@@ -42,7 +50,7 @@ This estimate intentionally excludes waiting and stop time because those are not
 The ride stores:
 
 - `estimatedFare` - integer total in UZS
-- `estimatedFareDetails` - JSON breakdown with tariff class, base fare, distance fare, minimum fare adjustment and total
+- `estimatedFareDetails` - JSON breakdown with tariff class, base fare amount, distance amount, minimum fare adjustment and total
 
 ## Final Fare
 
@@ -78,14 +86,14 @@ Both estimate and final calculations use the same breakdown shape:
   "tariffClass": "ECONOMY",
   "currency": "UZS",
   "distanceKm": 4,
-  "baseFare": 7000,
-  "distanceFare": 8000,
+  "baseFareAmount": 7000,
+  "distanceAmount": 8000,
   "freeWaitingMinutes": 3,
   "waitingMinutes": 5,
   "paidWaitingMinutes": 2,
-  "waitingFare": 1000,
+  "waitingAmount": 1000,
   "stopMinutes": 2,
-  "stopFare": 1000,
+  "stopAmount": 1000,
   "subtotal": 17000,
   "minimumFare": 12000,
   "minimumFareAdjustment": 0,

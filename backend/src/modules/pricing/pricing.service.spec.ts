@@ -17,6 +17,30 @@ const tariff = {
 async function main() {
   const service = new PricingService({} as never);
 
+  assert.deepEqual(service.getDefaultTariff(TariffClassValue.ECONOMY), tariff);
+  assert.deepEqual(service.getDefaultTariff(TariffClassValue.COMFORT), {
+    tariffClass: TariffClassValue.COMFORT,
+    city: 'Angren',
+    baseFare: 10000,
+    perKm: 2500,
+    freeWaitingMinutes: 3,
+    waitingPerMinute: 500,
+    stopPerMinute: 500,
+    minimumFare: 16000,
+    active: true,
+  });
+  assert.deepEqual(service.getDefaultTariff(TariffClassValue.PREMIUM), {
+    tariffClass: TariffClassValue.PREMIUM,
+    city: 'Angren',
+    baseFare: 15000,
+    perKm: 3500,
+    freeWaitingMinutes: 3,
+    waitingPerMinute: 500,
+    stopPerMinute: 500,
+    minimumFare: 25000,
+    active: true,
+  });
+
   assert.equal(
     service.calculateEstimatedFare({
       tariff,
@@ -33,14 +57,14 @@ async function main() {
       tariffClass: TariffClassValue.ECONOMY,
       currency: 'UZS',
       distanceKm: 4,
-      baseFare: 7000,
-      distanceFare: 8000,
+      baseFareAmount: 7000,
+      distanceAmount: 8000,
       freeWaitingMinutes: 3,
       waitingMinutes: 0,
       paidWaitingMinutes: 0,
-      waitingFare: 0,
+      waitingAmount: 0,
       stopMinutes: 0,
-      stopFare: 0,
+      stopAmount: 0,
       subtotal: 15000,
       minimumFare: 12000,
       minimumFareAdjustment: 0,
@@ -88,14 +112,14 @@ async function main() {
       tariffClass: TariffClassValue.ECONOMY,
       currency: 'UZS',
       distanceKm: 4,
-      baseFare: 7000,
-      distanceFare: 8000,
+      baseFareAmount: 7000,
+      distanceAmount: 8000,
       freeWaitingMinutes: 3,
       waitingMinutes: 5,
       paidWaitingMinutes: 2,
-      waitingFare: 1000,
+      waitingAmount: 1000,
       stopMinutes: 2,
-      stopFare: 1000,
+      stopAmount: 1000,
       subtotal: 17000,
       minimumFare: 12000,
       minimumFareAdjustment: 0,
