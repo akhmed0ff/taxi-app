@@ -1,4 +1,4 @@
-import type { activeOrders, drivers, tariffs } from '@/data/mock';
+import type { activeOrders, analytics, drivers, revenueByDay, tariffs } from '@/data/mock';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 export const ENABLE_ADMIN_MOCK_FALLBACK = process.env.NODE_ENV !== 'production';
@@ -6,6 +6,8 @@ export const ENABLE_ADMIN_MOCK_FALLBACK = process.env.NODE_ENV !== 'production';
 type AdminDriver = (typeof drivers)[number];
 type AdminOrder = (typeof activeOrders)[number];
 type AdminTariff = (typeof tariffs)[number];
+type AdminAnalytics = typeof analytics;
+type AdminRevenuePoint = (typeof revenueByDay)[number];
 
 interface BackendUser {
   id: string;
@@ -93,6 +95,11 @@ export interface AdminRideDetails extends AdminOrder {
   }>;
 }
 
+export interface AdminAnalyticsSummary extends AdminAnalytics {
+  revenueByDay: AdminRevenuePoint[];
+  tariffs: AdminTariff[];
+}
+
 export async function fetchAdminDrivers() {
   const data = await apiFetch<BackendDriver[]>('/drivers');
   return data.map(mapBackendDriver);
@@ -111,6 +118,16 @@ export async function fetchRideDetails(rideId: string) {
 export async function fetchTariffs() {
   const data = await apiFetch<BackendTariff[]>('/admin/tariffs');
   return data.map(mapBackendTariff);
+}
+
+export async function fetchAdminAnalytics(): Promise<AdminAnalyticsSummary> {
+  const [orders, driverList, tariffList] = await Promise.all([
+    fetchActiveOrders(),
+    fetchAdminDrivers(),
+    fetchTariffs(),
+  ]);
+
+  return buildBasicAnalytics(orders, driverList, tariffList);
 }
 
 export async function saveTariff(tariff: AdminTariff) {
@@ -314,6 +331,51 @@ function stableMapPosition(seed: string) {
   return {
     lat: 18 + (hash % 64),
     lng: 18 + ((hash >> 8) % 64),
+  };
+}
+
+function buildBasicAnalytics(
+  orders: AdminOrder[],
+  driverList: AdminDriver[],
+  tariffList: AdminTariff[],
+): AdminAnalyticsSummary {
+  const revenueToday = orders.reduce((sum, order) => sum + order.fare, 0);
+  const acceptedOrders = orders.filter(
+    (order) => order.status !== 'SEARCHING_DRIVER',
+  ).length;
+  const inProgressOrders = orders.filter(
+    (order) => order.status === 'IN_PROGRESS',
+  ).length;
+  const activeDrivers = driverList.filter(
+    (driver) => driver.status !== 'OFFLINE',
+  ).length;
+  const averageCheck =
+    orders.length > 0 ? Math.round(revenueToday / orders.length) : 0;
+  const acceptanceRate =
+    orders.length > 0 ? Math.round((acceptedOrders / orders.length) * 100) : 0;
+  const completionRate =
+    orders.length > 0 ? Math.round((inProgressOrders / orders.length) * 100) : 0;
+  const todayLabel = new Date().toLocaleDateString('ru-RU', {
+    weekday: 'short',
+  });
+
+  return {
+    tripsToday: orders.length,
+    revenueToday,
+    activeDrivers,
+    completionRate,
+    acceptanceRate,
+    averageCheck,
+    cancelledTrips: 0,
+    driverPayouts: Math.round(revenueToday * 0.7),
+    revenueByDay: [
+      {
+        day: todayLabel,
+        revenue: revenueToday,
+        trips: orders.length,
+      },
+    ],
+    tariffs: tariffList,
   };
 }
 

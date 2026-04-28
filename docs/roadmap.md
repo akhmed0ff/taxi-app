@@ -184,7 +184,7 @@ Already started:
 - Ride matching queue.
 - Passenger and driver Expo app prototypes.
 - Admin panel prototype.
-- Admin panel connected to backend API for drivers, active orders and tariffs with development-only mock fallback.
+- Admin panel connected to backend API for drivers, active orders, tariffs and basic analytics with development-only mock fallback.
 - Docker and CI/CD baseline.
 - Health, metrics and request logging.
 - Backend hardening for Stage 1 and Stage 3:
@@ -198,4 +198,4 @@ Next best focus:
 
 1. Add endpoint-level tests around protected admin/order/driver HTTP routes.
 2. Replace local admin dev-login fallback with seeded production admin credentials.
-3. Connect admin analytics metrics to backend aggregates.
+3. Add backend aggregate endpoints for completed/cancelled analytics instead of deriving only basic live metrics from current admin API calls.

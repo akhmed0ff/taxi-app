@@ -20,7 +20,6 @@ import { MetricCard } from '@/components/MetricCard';
 import { OrdersMap } from '@/components/OrdersMap';
 import {
   activeOrders as fallbackActiveOrders,
-  analytics,
   drivers as fallbackDrivers,
   formatSom,
   statusLabels,
@@ -47,6 +46,14 @@ export default function MonitoringPage() {
   const searchingOrders = activeOrders.filter(
     (order) => order.status === 'SEARCHING_DRIVER',
   );
+  const activeRevenue = activeOrders.reduce((sum, order) => sum + order.fare, 0);
+  const assignedOrders = activeOrders.filter(
+    (order) => order.status !== 'SEARCHING_DRIVER',
+  ).length;
+  const assignmentRate =
+    activeOrders.length > 0
+      ? Math.round((assignedOrders / activeOrders.length) * 100)
+      : 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -119,16 +126,16 @@ export default function MonitoringPage() {
 
         <Row gutter={[16, 16]}>
           <Col xs={24} md={12} xl={6}>
-            <MetricCard title="Поездки сегодня" value={analytics.tripsToday} />
+            <MetricCard title="Поездки сегодня" value={activeOrders.length} />
           </Col>
           <Col xs={24} md={12} xl={6}>
-            <MetricCard title="Доход" value={analytics.revenueToday} suffix="сум" />
+            <MetricCard title="Доход" value={activeRevenue} suffix="сум" />
           </Col>
           <Col xs={24} md={12} xl={6}>
             <MetricCard title="Водители онлайн" value={drivers.filter((driver) => driver.status !== 'OFFLINE').length} />
           </Col>
           <Col xs={24} md={12} xl={6}>
-            <MetricCard title="Завершение" value={analytics.completionRate} suffix="%" />
+            <MetricCard title="Назначение" value={assignmentRate} suffix="%" />
           </Col>
         </Row>
 

@@ -1,14 +1,23 @@
 'use client';
 
-import { Card, Col, Progress, Row, Space, Table, Typography } from 'antd';
+import { Alert, Card, Col, Progress, Row, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { useEffect, useMemo, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
 import { MetricCard } from '@/components/MetricCard';
-import { analytics, formatSom, revenueByDay, tariffs } from '@/data/mock';
+import {
+  analytics as fallbackAnalytics,
+  formatSom,
+  revenueByDay as fallbackRevenueByDay,
+  tariffs as fallbackTariffs,
+} from '@/data/mock';
+import {
+  AdminAnalyticsSummary,
+  ENABLE_ADMIN_MOCK_FALLBACK,
+  fetchAdminAnalytics,
+} from '@/services/api';
 
-type RevenuePoint = (typeof revenueByDay)[number];
-
-const maxRevenue = Math.max(...revenueByDay.map((item) => item.revenue));
+type RevenuePoint = (typeof fallbackRevenueByDay)[number];
 
 const columns: ColumnsType<RevenuePoint> = [
   { title: 'День', dataIndex: 'day' },
@@ -22,6 +31,59 @@ const columns: ColumnsType<RevenuePoint> = [
 ];
 
 export default function AnalyticsPage() {
+  const [summary, setSummary] = useState<AdminAnalyticsSummary>({
+    ...fallbackAnalytics,
+    revenueByDay: ENABLE_ADMIN_MOCK_FALLBACK ? fallbackRevenueByDay : [],
+    tariffs: ENABLE_ADMIN_MOCK_FALLBACK ? fallbackTariffs : [],
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>();
+  const maxRevenue = useMemo(
+    () => Math.max(1, ...summary.revenueByDay.map((item) => item.revenue)),
+    [summary.revenueByDay],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAnalytics() {
+      setLoading(true);
+      setError(undefined);
+
+      try {
+        const nextSummary = await fetchAdminAnalytics();
+
+        if (!cancelled) {
+          setSummary(nextSummary);
+        }
+      } catch (nextError) {
+        if (!cancelled) {
+          console.warn(nextError);
+          setSummary({
+            ...fallbackAnalytics,
+            revenueByDay: ENABLE_ADMIN_MOCK_FALLBACK ? fallbackRevenueByDay : [],
+            tariffs: ENABLE_ADMIN_MOCK_FALLBACK ? fallbackTariffs : [],
+          });
+          setError(
+            ENABLE_ADMIN_MOCK_FALLBACK
+              ? 'Backend недоступен. Показаны fallback mock-данные.'
+              : 'Backend API unavailable. Mock fallback is disabled in production.',
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadAnalytics();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <AdminShell>
       <Space direction="vertical" size={20} style={{ width: '100%' }}>
@@ -30,30 +92,32 @@ export default function AnalyticsPage() {
             Аналитика
           </Typography.Title>
           <Typography.Text type="secondary">
-            Поездки, доход, конверсия и выплаты водителям.
+            Базовые операционные метрики из backend API.
           </Typography.Text>
         </div>
 
+        {error && <Alert message={error} type="warning" showIcon />}
+
         <Row gutter={[16, 16]}>
           <Col xs={24} md={12} xl={6}>
-            <MetricCard title="Поездки" value={analytics.tripsToday} />
+            <MetricCard title="Активные поездки" value={summary.tripsToday} />
           </Col>
           <Col xs={24} md={12} xl={6}>
-            <MetricCard title="Доход" value={analytics.revenueToday} suffix="сум" />
+            <MetricCard title="Активный доход" value={summary.revenueToday} suffix="сум" />
           </Col>
           <Col xs={24} md={12} xl={6}>
-            <MetricCard title="Средний чек" value={analytics.averageCheck} suffix="сум" />
+            <MetricCard title="Средний чек" value={summary.averageCheck} suffix="сум" />
           </Col>
           <Col xs={24} md={12} xl={6}>
-            <MetricCard title="Отмены" value={analytics.cancelledTrips} />
+            <MetricCard title="Водители онлайн" value={summary.activeDrivers} />
           </Col>
         </Row>
 
         <Row gutter={[16, 16]}>
           <Col xs={24} xl={14}>
-            <Card title="Доход за неделю">
+            <Card loading={loading} title="Доход по доступным данным">
               <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                {revenueByDay.map((item) => (
+                {summary.revenueByDay.map((item) => (
                   <div className="chart-row" key={item.day}>
                     <Typography.Text className="chart-label">{item.day}</Typography.Text>
                     <div className="chart-track">
@@ -69,20 +133,24 @@ export default function AnalyticsPage() {
             </Card>
           </Col>
           <Col xs={24} xl={10}>
-            <Card title="Операционные показатели">
+            <Card loading={loading} title="Операционные показатели">
               <Space direction="vertical" size={18} style={{ width: '100%' }}>
                 <div>
-                  <Typography.Text>Завершенные поездки</Typography.Text>
-                  <Progress percent={analytics.completionRate} />
+                  <Typography.Text>Поездки в процессе</Typography.Text>
+                  <Progress percent={summary.completionRate} />
                 </div>
                 <div>
-                  <Typography.Text>Принятие заказов</Typography.Text>
-                  <Progress percent={analytics.acceptanceRate} />
+                  <Typography.Text>Назначенные заказы</Typography.Text>
+                  <Progress percent={summary.acceptanceRate} />
                 </div>
                 <div>
-                  <Typography.Text>Выплаты водителям</Typography.Text>
+                  <Typography.Text>Оценка выплат водителям</Typography.Text>
                   <Progress
-                    percent={Math.round((analytics.driverPayouts / analytics.revenueToday) * 100)}
+                    percent={
+                      summary.revenueToday > 0
+                        ? Math.round((summary.driverPayouts / summary.revenueToday) * 100)
+                        : 0
+                    }
                   />
                 </div>
               </Space>
@@ -92,10 +160,11 @@ export default function AnalyticsPage() {
 
         <Row gutter={[16, 16]}>
           <Col xs={24} xl={12}>
-            <Card title="Сводка по дням">
+            <Card title="Сводка">
               <Table
                 columns={columns}
-                dataSource={revenueByDay}
+                dataSource={summary.revenueByDay}
+                loading={loading}
                 pagination={false}
                 rowKey="day"
                 size="middle"
@@ -103,7 +172,7 @@ export default function AnalyticsPage() {
             </Card>
           </Col>
           <Col xs={24} xl={12}>
-            <Card title="Тарифы по спросу">
+            <Card title="Тарифы">
               <Table
                 columns={[
                   { title: 'Тариф', dataIndex: 'name' },
@@ -115,7 +184,8 @@ export default function AnalyticsPage() {
                     render: (value: number) => formatSom(value),
                   },
                 ]}
-                dataSource={tariffs}
+                dataSource={summary.tariffs}
+                loading={loading}
                 pagination={false}
                 rowKey="key"
                 size="middle"
