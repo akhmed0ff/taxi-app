@@ -91,7 +91,19 @@ export class OrderService {
   async findOne(rideId: string) {
     const ride = await this.prisma.ride.findUnique({
       where: { id: rideId },
-      include: { customer: true, driver: true, statusHistory: true, payment: true },
+      include: {
+        customer: true,
+        driver: {
+          include: {
+            user: true,
+            vehicle: true,
+          },
+        },
+        statusHistory: {
+          orderBy: { createdAt: 'asc' },
+        },
+        payment: true,
+      },
     });
 
     if (!ride) {
@@ -321,6 +333,7 @@ export class OrderService {
       where: { id: rideId },
       data: {
         status: OrderStatusValue.CANCELLED,
+        cancelReason: reason,
         statusHistory: {
           create: {
             status: OrderStatusValue.CANCELLED,

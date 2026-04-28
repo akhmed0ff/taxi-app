@@ -80,6 +80,7 @@ export class MatchingService {
       where: { id: ride.id },
       data: {
         status: OrderStatusValue.CANCELLED,
+        cancelReason: 'NO_DRIVER_FOUND',
         statusHistory: {
           create: {
             status: OrderStatusValue.CANCELLED,

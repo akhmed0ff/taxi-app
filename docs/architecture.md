@@ -69,6 +69,8 @@ Order Service:
 
 - order creation
 - order state machine
+- cancel rules for passenger, driver and admin
+- persistent `cancelReason` on cancelled rides
 
 Order states:
 
@@ -90,7 +92,7 @@ Matching Engine:
 - sends offers with a short TTL
 - schedules the next matching attempt if nobody accepts
 - expands search radius on each attempt
-- cancels the ride with `NO_DRIVERS_AVAILABLE` after the final attempt
+- cancels the ride with `NO_DRIVER_FOUND` after the final attempt
 
 Pricing Service:
 
@@ -101,7 +103,7 @@ Pricing Service:
 
 Payment Service:
 
-- cash/card payment modes
+- cash payment mode for MVP
 - commission calculation
 
 ## Realtime
@@ -128,6 +130,8 @@ Events:
 - `DRIVER_LOCATION`
 - `TRIP_STARTED`
 - `TRIP_COMPLETED`
+- `RIDE_CANCELLED`
+- `PAYMENT_COMPLETED`
 
 ## Queues
 
@@ -170,6 +174,13 @@ PATCH /orders/:rideId/complete
   -> driver status ONLINE
   -> emits TRIP_COMPLETED
 
+PATCH /orders/:rideId/cancel
+  -> validates actor-specific cancel rules
+  -> stores cancelReason on Ride and RideStatusHistory
+  -> ride status CANCELLED
+  -> assigned BUSY driver returns ONLINE
+  -> emits RIDE_CANCELLED
+
 PATCH /orders/:rideId/pay
   -> payment status PAID
   -> emits PAYMENT_COMPLETED
@@ -181,7 +192,7 @@ Reliability:
 
 - BullMQ jobs use retry with exponential backoff.
 - Ride matching expands the search radius on each retry.
-- If no driver is found after all attempts, the ride is cancelled with `NO_DRIVERS_AVAILABLE` and the passenger receives `MATCHING_FAILED`.
+- If no driver is found after all attempts, the ride is cancelled with `NO_DRIVER_FOUND` and the passenger receives `MATCHING_FAILED`.
 
 Speed:
 
@@ -192,6 +203,7 @@ State control:
 
 - Ride status transitions are validated through `ORDER_STATUS_FLOW`.
 - Invalid transitions return a bad request instead of mutating the ride.
+- Cancel flow is actor-aware: passengers and drivers can cancel before `IN_PROGRESS`; admins can cancel any non-completed ride; `COMPLETED` and already `CANCELLED` rides are immutable.
 
 Scalability:
 

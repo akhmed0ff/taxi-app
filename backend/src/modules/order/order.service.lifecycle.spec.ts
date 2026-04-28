@@ -24,6 +24,7 @@ interface RideState {
   estimatedFareDetails?: unknown;
   finalFare?: number;
   finalFareDetails?: unknown;
+  cancelReason?: string;
 }
 
 interface DriverState {
@@ -323,9 +324,11 @@ async function main() {
   await testInvalidTransitionFails();
   await testPassengerCanCancelBeforeTripStarts();
   await testDriverCanCancelAssignedRideAndReturnsOnline();
+  await testAdminCanCancelInProgressRide();
   await testPassengerCannotCancelInProgressRide();
   await testDriverCannotCancelAnotherRide();
   await testCompletedRideCannotBeCancelled();
+  await testCancelledRideCannotBeCancelledAgain();
 }
 
 async function testLifecycleCreatesPendingPayment() {
@@ -456,6 +459,7 @@ async function testPassengerCanCancelBeforeTripStarts() {
   );
 
   assert.equal(cancelled.ride.status, OrderStatusValue.CANCELLED);
+  assert.equal(cancelled.ride.cancelReason, 'PASSENGER_CHANGED_PLANS');
   assert.equal(
     state.statusHistory.at(-1)?.reason,
     'PASSENGER_CHANGED_PLANS',
@@ -492,6 +496,44 @@ async function testDriverCanCancelAssignedRideAndReturnsOnline() {
   );
 
   assert.equal(cancelled.ride.status, OrderStatusValue.CANCELLED);
+  assert.equal(cancelled.ride.cancelReason, 'DRIVER_UNAVAILABLE');
+  assert.equal(state.drivers.get('driver-1')?.status, DriverStatusValue.ONLINE);
+}
+
+async function testAdminCanCancelInProgressRide() {
+  const { service, state } = createCoreFlowMock();
+  const passengerUser = {
+    userId: 'passenger-1',
+    role: UserRoleValue.PASSENGER,
+  };
+  const driverUser = {
+    userId: 'driver-user-1',
+    role: UserRoleValue.DRIVER,
+  };
+  const adminUser = {
+    userId: 'admin-1',
+    role: UserRoleValue.ADMIN,
+  };
+
+  const createdRide = await service.create({
+    customerId: passengerUser.userId,
+    pickupLat: 41.0167,
+    pickupLng: 70.1436,
+    dropoffLat: 41.03,
+    dropoffLng: 70.16,
+  });
+  await service.accept(createdRide.id, 'driver-1', driverUser);
+  await service.markDriverArrived(createdRide.id, driverUser);
+  await service.startTrip(createdRide.id, driverUser);
+
+  const cancelled = await service.cancelRide(
+    createdRide.id,
+    'ADMIN_FORCE_CANCEL',
+    adminUser,
+  );
+
+  assert.equal(cancelled.ride.status, OrderStatusValue.CANCELLED);
+  assert.equal(cancelled.ride.cancelReason, 'ADMIN_FORCE_CANCEL');
   assert.equal(state.drivers.get('driver-1')?.status, DriverStatusValue.ONLINE);
 }
 
@@ -581,6 +623,30 @@ async function testCompletedRideCannotBeCancelled() {
 
   await assert.rejects(
     () => service.cancelRide(createdRide.id, 'ADMIN_LATE_CANCEL', adminUser),
+    (error) =>
+      error instanceof BadRequestException &&
+      /cannot be cancelled in its current status/.test(error.message),
+  );
+}
+
+async function testCancelledRideCannotBeCancelledAgain() {
+  const { service } = createCoreFlowMock();
+  const passengerUser = {
+    userId: 'passenger-1',
+    role: UserRoleValue.PASSENGER,
+  };
+
+  const createdRide = await service.create({
+    customerId: passengerUser.userId,
+    pickupLat: 41.0167,
+    pickupLng: 70.1436,
+    dropoffLat: 41.03,
+    dropoffLng: 70.16,
+  });
+  await service.cancelRide(createdRide.id, 'FIRST_CANCEL', passengerUser);
+
+  await assert.rejects(
+    () => service.cancelRide(createdRide.id, 'SECOND_CANCEL', passengerUser),
     (error) =>
       error instanceof BadRequestException &&
       /cannot be cancelled in its current status/.test(error.message),

@@ -26,6 +26,7 @@ docs/      архитектура, деплой и roadmap
 - Auth endpoints: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`
 - Development-only auth shortcut: `POST /auth/dev-login` работает только при `NODE_ENV != production`
 - JWT AuthGuard и RoleGuard для HTTP endpoints
+- Cancel ride flow: passenger/driver before `IN_PROGRESS`, admin before final states, `cancelReason`, driver returns `ONLINE`, realtime `RIDE_CANCELLED`.
 - Жизненный цикл заказа: создать, принять, приехать, начать, завершить, оплатить
 - Отдельный `MatchingModule`
 - Поиск водителей через Redis GEO
@@ -106,6 +107,7 @@ npm run start
 7. Геолокация водителя отправляется каждые несколько секунд, пока он активен.
 8. Пассажир получает realtime-события поездки.
 9. После завершения создается pending payment; оплату можно отметить как paid.
+10. До финальных состояний заказ можно отменить через `PATCH /orders/:rideId/cancel`; backend сохраняет `cancelReason` и отправляет `RIDE_CANCELLED`.
 
 ## Realtime Security
 

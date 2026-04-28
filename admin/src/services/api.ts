@@ -49,6 +49,7 @@ interface BackendRide {
   distanceMeters?: number;
   waitingMinutes?: number;
   stopMinutes?: number;
+  cancelReason?: string;
   createdAt: string;
   customer?: BackendUser;
   driver?: BackendDriver & { user?: BackendUser };
@@ -86,6 +87,7 @@ export interface AdminRideDetails extends AdminOrder {
   distanceKm: number;
   waitingMinutes: number;
   stopMinutes: number;
+  cancelReason?: string;
   paymentStatus: string;
   paymentMethod: string;
   statusHistory: Array<{
@@ -265,6 +267,7 @@ function mapBackendRideDetails(ride: BackendRide): AdminRideDetails {
     distanceKm: Math.round(((ride.distanceMeters ?? 0) / 1000) * 10) / 10,
     waitingMinutes: ride.waitingMinutes ?? 0,
     stopMinutes: ride.stopMinutes ?? 0,
+    cancelReason: ride.cancelReason,
     paymentStatus: ride.payment?.status ?? '-',
     paymentMethod: ride.payment?.method ?? '-',
     statusHistory: ride.statusHistory ?? [],

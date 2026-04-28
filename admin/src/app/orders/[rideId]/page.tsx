@@ -91,6 +91,9 @@ export default function OrderDetailsPage({ params }: OrderDetailsPageProps) {
                 <Descriptions.Item label="Дистанция">{ride.distanceKm} км</Descriptions.Item>
                 <Descriptions.Item label="Ожидание">{ride.waitingMinutes} мин</Descriptions.Item>
                 <Descriptions.Item label="Остановки">{ride.stopMinutes} мин</Descriptions.Item>
+                {ride.cancelReason && (
+                  <Descriptions.Item label="Причина отмены">{ride.cancelReason}</Descriptions.Item>
+                )}
                 <Descriptions.Item label="Оплата">
                   {ride.paymentStatus} / {ride.paymentMethod}
                 </Descriptions.Item>
