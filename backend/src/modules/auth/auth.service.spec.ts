@@ -269,6 +269,27 @@ async function testExpiredRefreshTokenFails() {
   );
 }
 
+async function testLogoutRevokesRefreshToken() {
+  const { service, state } = createAuthMock();
+  const registered = await service.register({
+    phone: '+998900006666',
+    password: 'password123',
+    name: 'Passenger',
+    role: UserRoleValue.PASSENGER,
+  });
+
+  const logout = await service.logout({
+    refreshToken: registered.refreshToken,
+  });
+  assert.deepEqual(logout, { ok: true });
+  assert.equal([...state.refreshTokens.values()].filter((token) => token.revoked).length, 1);
+
+  await assert.rejects(
+    () => service.refresh({ refreshToken: registered.refreshToken }),
+    UnauthorizedException,
+  );
+}
+
 async function testRegisterRejectsDuplicatePhone() {
   const { service } = createAuthMock();
   const input = {
@@ -342,6 +363,7 @@ async function testRegisterCreatesDriverProfile() {
 async function main() {
   await testRegisterLoginRefreshLogout();
   await testExpiredRefreshTokenFails();
+  await testLogoutRevokesRefreshToken();
   await testRegisterRejectsDuplicatePhone();
   await testDevLoginWorksOutsideProduction();
   await testDevLoginDisabledInProduction();

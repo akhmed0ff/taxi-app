@@ -90,6 +90,7 @@ curl -X POST http://localhost:3000/auth/logout \
 ```
 
 Logout revokes the submitted refresh token and returns `{ "ok": true }`.
+After logout, calling `/auth/refresh` with the same refresh token returns `401 Unauthorized`.
 
 ## Roles
 
