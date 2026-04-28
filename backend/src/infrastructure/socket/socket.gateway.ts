@@ -107,14 +107,9 @@ export class SocketGateway implements OnGatewayConnection {
 
   private extractAccessToken(client: Socket) {
     const authToken = client.handshake.auth?.accessToken;
-    const bearerToken = client.handshake.headers.authorization;
 
     if (typeof authToken === 'string') {
       return authToken;
-    }
-
-    if (typeof bearerToken === 'string' && bearerToken.startsWith('Bearer ')) {
-      return bearerToken.slice('Bearer '.length);
     }
 
     return undefined;
