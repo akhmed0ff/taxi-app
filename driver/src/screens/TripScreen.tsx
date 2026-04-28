@@ -14,12 +14,24 @@ export function TripScreen({ trip, onStart, onComplete }: TripScreenProps) {
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
+        <View style={styles.routeLine} />
         <Text style={styles.mapTitle}>{isInProgress ? t('tripInProgress') : t('passengerNearby')}</Text>
         <Text style={styles.mapMeta}>{trip.dropoffAddress}</Text>
       </View>
       <View style={styles.panel}>
+        <View style={styles.stepPill}>
+          <Text style={styles.stepPillText}>{isInProgress ? 'Шаг 3 из 3 · поездка' : 'Шаг 2 из 3 · посадка'}</Text>
+        </View>
         <Text style={styles.title}>{isInProgress ? t('drivePassenger') : t('startTrip')}</Text>
+        <Text style={styles.routeText}>{trip.pickupAddress} → {trip.dropoffAddress}</Text>
         <Text style={styles.price}>{trip.price.toLocaleString()} {t('som')}</Text>
+
+        <View style={styles.statusBox}>
+          <StatusRow active label="Заказ принят" />
+          <StatusRow active label="Водитель на месте" />
+          <StatusRow active={isInProgress} label="Поездка началась" />
+        </View>
+
         <Pressable onPress={isInProgress ? onComplete : onStart} style={styles.primaryButton}>
           <Text style={styles.primaryText}>{isInProgress ? t('complete') : t('start')}</Text>
         </Pressable>
@@ -28,14 +40,32 @@ export function TripScreen({ trip, onStart, onComplete }: TripScreenProps) {
   );
 }
 
+function StatusRow({ active, label }: { active: boolean; label: string }) {
+  return (
+    <View style={styles.statusRow}>
+      <View style={[styles.statusDot, active && styles.statusDotActive]} />
+      <Text style={styles.statusText}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#e2e8f0' },
   map: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#dbeafe' },
+  routeLine: { position: 'absolute', left: 56, right: 56, top: '50%', height: 4, borderRadius: 4, backgroundColor: '#1d4ed8', transform: [{ rotate: '8deg' }] },
   mapTitle: { fontSize: 30, fontWeight: '900', color: '#0f172a' },
-  mapMeta: { marginTop: 8, color: '#334155' },
+  mapMeta: { marginTop: 8, paddingHorizontal: 24, textAlign: 'center', color: '#334155', fontWeight: '700' },
   panel: { padding: 18, backgroundColor: '#ffffff' },
-  title: { fontSize: 24, fontWeight: '900', color: '#111827' },
+  stepPill: { alignSelf: 'flex-start', minHeight: 30, paddingHorizontal: 10, justifyContent: 'center', borderRadius: 8, backgroundColor: '#eff6ff' },
+  stepPillText: { color: '#1d4ed8', fontWeight: '900' },
+  title: { marginTop: 12, fontSize: 24, fontWeight: '900', color: '#111827' },
+  routeText: { marginTop: 8, color: '#334155', fontWeight: '700' },
   price: { marginTop: 10, fontSize: 28, fontWeight: '900', color: '#111827' },
+  statusBox: { marginTop: 14, padding: 12, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, backgroundColor: '#f8fafc' },
+  statusRow: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  statusDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#cbd5e1' },
+  statusDotActive: { backgroundColor: '#16a34a' },
+  statusText: { color: '#334155', fontWeight: '700' },
   primaryButton: { height: 54, marginTop: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#16a34a' },
   primaryText: { color: '#ffffff', fontSize: 16, fontWeight: '900' },
 });

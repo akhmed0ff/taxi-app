@@ -70,7 +70,11 @@ export default function App() {
 
         const nextOrder = { ...current, ...payload };
 
-        if (nextOrder.status === 'DRIVER_ASSIGNED') {
+        if (
+          nextOrder.status === 'DRIVER_ASSIGNED' ||
+          nextOrder.status === 'DRIVER_ARRIVED' ||
+          nextOrder.status === 'IN_PROGRESS'
+        ) {
           setScreen('trip');
         }
 

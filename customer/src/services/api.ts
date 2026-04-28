@@ -233,7 +233,7 @@ export function mapRideToOrder(
     driver: ride.driverId
       ? {
           id: ride.driverId,
-          name: 'Driver',
+          name: 'Водитель ANGREN TAXI',
           car: 'ANGREN TAXI',
           rating: 5,
           etaMinutes: 4,
