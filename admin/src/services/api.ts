@@ -1,4 +1,15 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+if (
+  process.env.NODE_ENV === 'production' &&
+  (!configuredApiUrl ||
+    configuredApiUrl === 'http://localhost:3000' ||
+    configuredApiUrl === 'http://127.0.0.1:3000')
+) {
+  throw new Error('NEXT_PUBLIC_API_URL must be a real public API URL in production');
+}
+
+export const API_URL = configuredApiUrl ?? 'http://localhost:3000';
 
 export type OrderStatus =
   | 'SEARCHING_DRIVER'

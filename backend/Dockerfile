@@ -23,4 +23,4 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 RUN npm prune --omit=dev
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+CMD ["node", "dist/main"]

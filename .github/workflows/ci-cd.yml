@@ -58,6 +58,8 @@ jobs:
   admin:
     name: Admin
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_API_URL: https://api.example.com
     defaults:
       run:
         working-directory: admin
@@ -79,6 +81,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker compose build backend admin
+        env:
+          JWT_SECRET: ci-secret
+          NEXT_PUBLIC_API_URL: https://api.example.com
 
   deploy:
     name: Deploy To VPS
@@ -112,7 +117,9 @@ jobs:
             cd ${{ env.VPS_APP_DIR }}
             git pull --ff-only
             docker compose build backend admin
-            docker compose up -d postgres redis backend admin
+            docker compose up -d postgres redis
+            docker compose run --rm migrate
+            docker compose up -d backend admin
             docker compose ps
             for i in $(seq 1 30); do
               if docker compose exec -T backend node -e "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then

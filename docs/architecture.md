@@ -214,7 +214,7 @@ Scalability:
 Observability:
 
 - `GET /health` checks API, database and Redis.
-- `GET /metrics` exposes Prometheus-style HTTP counters and uptime.
+- `GET /metrics` exposes Prometheus-style HTTP counters and uptime. In production it should be blocked at Nginx except for allowlisted monitoring IPs.
 - HTTP requests are logged with method, route, status and duration.
 
 ## Geo

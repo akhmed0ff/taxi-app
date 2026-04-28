@@ -1,6 +1,7 @@
 import { JwtModule } from '@nestjs/jwt';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { getJwtSecret } from '../../common/auth/jwt-secret';
 import { PrismaModule } from '../../infrastructure/db/prisma.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -12,7 +13,7 @@ import { AuthService } from './auth.service';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET', 'change-me'),
+        secret: getJwtSecret(config),
         signOptions: { expiresIn: '15m' },
       }),
     }),

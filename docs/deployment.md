@@ -38,10 +38,16 @@ Before starting production, replace:
 - `JWT_SECRET`
 - `NEXT_PUBLIC_ADMIN_PASSWORD`
 - `NEXT_PUBLIC_API_URL`
+- `BACKEND_BIND`
+- `ADMIN_BIND`
 - `PUBLIC_API_URL`
 - `PUBLIC_ADMIN_URL`
 
-`NEXT_PUBLIC_API_URL` is passed to the admin image at build time, so rebuild admin after changing it:
+`JWT_SECRET` is required in Docker Compose and the backend refuses to start in production when it is missing or set to `change-me`.
+
+`NEXT_PUBLIC_API_URL` is passed to the admin image at build time. In production it must be a real public API URL, for example `https://api.example.com`; the admin image intentionally fails to build with `http://localhost:3000` or `http://127.0.0.1:3000`.
+
+Rebuild admin after changing `NEXT_PUBLIC_API_URL`:
 
 ```bash
 docker compose build admin
@@ -58,12 +64,22 @@ The root `docker-compose.yml` contains:
 - Admin image built from `admin/Dockerfile`.
 - Healthchecks for Postgres, Redis, backend and admin.
 - Docker JSON log rotation through `DOCKER_LOG_MAX_SIZE` and `DOCKER_LOG_MAX_FILE`.
-- Postgres and Redis bound to `127.0.0.1` by default through `POSTGRES_BIND` and `REDIS_BIND`.
+- Postgres, Redis, backend and admin bound to `127.0.0.1` by default through `POSTGRES_BIND`, `REDIS_BIND`, `BACKEND_BIND` and `ADMIN_BIND`.
+- Prisma migrations run through a dedicated one-shot `migrate` compose service, not from the backend startup command.
 
 Start the stack:
 
 ```bash
 docker compose up -d --build
+```
+
+For a deploy with explicit migration control:
+
+```bash
+docker compose build backend admin
+docker compose up -d postgres redis
+docker compose run --rm migrate
+docker compose up -d backend admin
 ```
 
 Check status:
@@ -78,10 +94,10 @@ curl http://localhost:3000/metrics
 Apply Prisma migrations manually if needed:
 
 ```bash
-docker compose exec backend npx prisma migrate deploy
+docker compose run --rm migrate
 ```
 
-The backend container also runs `prisma migrate deploy` before `node dist/main`.
+The backend container starts only the NestJS runtime: `node dist/main`.
 
 ## VPS Setup
 
@@ -152,6 +168,8 @@ The provided config assumes Nginx runs directly on the VPS host and proxies to D
 
 - `127.0.0.1:3000` -> backend
 - `127.0.0.1:3001` -> admin
+
+`/metrics` is blocked from public access in the Nginx example. It allows only `127.0.0.1` by default. Add your private monitoring server IP to the allowlist if Prometheus scrapes remotely.
 
 ## HTTPS With Certbot
 
@@ -229,10 +247,10 @@ Docker Compose backend healthcheck calls `GET /health` from inside the backend c
 Metrics endpoint:
 
 ```bash
-curl https://api.example.com/metrics
+curl http://127.0.0.1:3000/metrics
 ```
 
-It exposes Prometheus-style HTTP counters and uptime from the NestJS observability module.
+It exposes Prometheus-style HTTP counters and uptime from the NestJS observability module. Through public Nginx, `/metrics` should return `403` unless the client IP is allowlisted.
 
 Admin healthcheck:
 
@@ -295,20 +313,25 @@ Deploy steps:
 
 1. `git pull --ff-only`
 2. `docker compose build backend admin`
-3. `docker compose up -d postgres redis backend admin`
-4. `docker compose ps`
-5. backend container health probe against `http://127.0.0.1:3000/health` with retries
-6. `docker image prune -f`
+3. `docker compose up -d postgres redis`
+4. `docker compose run --rm migrate`
+5. `docker compose up -d backend admin`
+6. `docker compose ps`
+7. backend container health probe against `http://127.0.0.1:3000/health` with retries
+8. `docker image prune -f`
 
 ## Production Checklist
 
 - Replace all default secrets in `.env`.
 - Set `NEXT_PUBLIC_API_URL=https://api.example.com`.
 - Rebuild admin after env changes.
-- Run `docker compose up -d --build`.
+- Run `docker compose build backend admin`.
+- Run `docker compose up -d postgres redis`.
+- Run `docker compose run --rm migrate`.
+- Run `docker compose up -d backend admin`.
 - Confirm `docker compose ps` shows healthy backend.
 - Confirm `https://api.example.com/health`.
-- Confirm `https://api.example.com/metrics`.
+- Confirm public `https://api.example.com/metrics` is blocked, and local `curl http://127.0.0.1:3000/metrics` works on the VPS.
 - Confirm `https://admin.example.com` loads.
 - Confirm Socket.IO works through Nginx by creating a ride and watching live admin updates.
 - Enable Certbot renewal.

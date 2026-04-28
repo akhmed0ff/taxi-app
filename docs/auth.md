@@ -134,7 +134,7 @@ Current role matrix:
 | `PATCH /admin/tariffs/:tariffId` | `ADMIN` |
 | `GET /users` | `ADMIN` |
 
-`/health`, `/metrics`, `/auth/register`, `/auth/login`, `/auth/refresh`, and `/auth/logout` are public by design.
+`/health`, `/auth/register`, `/auth/login`, `/auth/refresh`, and `/auth/logout` are public by design. `/metrics` is exposed by the backend for observability, but the production Nginx example blocks public access and allows only allowlisted monitoring IPs.
 
 ## Socket.IO Authorization
 

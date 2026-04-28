@@ -143,7 +143,7 @@ npm run dev
 
 Admin backend API:
 
-- `NEXT_PUBLIC_API_URL` points the admin panel to the backend, default `http://localhost:3000`.
+- `NEXT_PUBLIC_API_URL` points the admin panel to the backend. Production builds require a real public API URL and reject localhost.
 - `NEXT_PUBLIC_ADMIN_PHONE` and `NEXT_PUBLIC_ADMIN_PASSWORD` are used for admin login.
 - If admin login fails in development, the panel may use `/auth/dev-login`.
 - Mock data has been removed from the admin panel; drivers, active orders, tariffs and basic analytics must come from the backend API.

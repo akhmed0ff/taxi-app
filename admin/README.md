@@ -25,6 +25,6 @@ npm run dev
 
 Required backend config:
 
-- `NEXT_PUBLIC_API_URL` points to the backend, default `http://localhost:3000`.
+- `NEXT_PUBLIC_API_URL` points to the backend. Production builds require a real public API URL and reject localhost.
 - `NEXT_PUBLIC_ADMIN_PHONE` and `NEXT_PUBLIC_ADMIN_PASSWORD` are used for admin login.
 - Admin data is loaded from backend API only; local mock data is not used.
