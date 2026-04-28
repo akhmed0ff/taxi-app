@@ -172,8 +172,12 @@ export default function App() {
           onBack={() => setScreen('home')}
         />
       )}
-      {screen === 'tariff' && canSelectTariff && (
-        <TariffScreen onTariffSelected={handleTariffSelected} />
+      {screen === 'tariff' && canSelectTariff && pickup && dropoff && (
+        <TariffScreen
+          dropoff={dropoff}
+          onTariffSelected={handleTariffSelected}
+          pickup={pickup}
+        />
       )}
       {screen === 'search' && order && (
         <SearchDriverScreen onCancel={handleCancelOrder} order={order} />

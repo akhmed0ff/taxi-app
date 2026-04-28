@@ -103,6 +103,22 @@ Both estimate and final calculations use the same breakdown shape:
 
 For `estimatedFareDetails`, waiting and stop fields are `0`.
 
+## Customer App Display
+
+The customer app shows the same ANGREN TAXI tariff model on the tariff selection screen:
+
+- tariff class: Economy, Comfort, Premium
+- base fare
+- price per kilometer
+- free waiting minutes
+- waiting price after the free period
+- stop price per minute
+- minimum fare
+
+After an order is created, the app uses `estimatedFareDetails` from the backend response to show the actual backend fare breakdown. During and after the trip, realtime ride updates can replace it with `finalFareDetails`.
+
+Dynamic surge pricing is intentionally not part of the current MVP tariff model.
+
 ## Backend Commands
 
 ```bash

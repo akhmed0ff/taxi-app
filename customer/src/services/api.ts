@@ -5,6 +5,7 @@ import {
   RideHistoryFilter,
   RideHistoryItem,
   TariffClass,
+  FareBreakdown,
 } from '../types/order';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -41,7 +42,9 @@ interface BackendRide {
   dropoffLng: number;
   dropoffAddress?: string;
   estimatedFare?: number;
+  estimatedFareDetails?: FareBreakdown;
   finalFare?: number;
+  finalFareDetails?: FareBreakdown;
   driverId?: string;
   tariffClass?: TariffClass;
   createdAt?: string;
@@ -230,10 +233,11 @@ export function mapRideToOrder(
     },
     tariff,
     price: ride.finalFare ?? ride.estimatedFare ?? 0,
+    fareBreakdown: ride.finalFareDetails ?? ride.estimatedFareDetails,
     driver: ride.driverId
       ? {
           id: ride.driverId,
-          name: 'Водитель ANGREN TAXI',
+          name: 'ANGREN TAXI',
           car: 'ANGREN TAXI',
           rating: 5,
           etaMinutes: 4,

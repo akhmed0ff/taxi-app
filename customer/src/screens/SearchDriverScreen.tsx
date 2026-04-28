@@ -31,6 +31,14 @@ export function SearchDriverScreen({ onCancel, order }: SearchDriverScreenProps)
         <Text style={styles.address}>{order.pickup.address ?? 'Точка подачи'}</Text>
         <Text style={styles.label}>Куда</Text>
         <Text style={styles.address}>{order.dropoff.address ?? 'Точка назначения'}</Text>
+        {order.fareBreakdown && (
+          <View style={styles.fareBox}>
+            <Text style={styles.label}>Стоимость</Text>
+            <Text style={styles.fareText}>
+              {order.fareBreakdown.baseFareAmount.toLocaleString('ru-RU')} + {order.fareBreakdown.distanceAmount.toLocaleString('ru-RU')} = {order.fareBreakdown.total.toLocaleString('ru-RU')} {t('som')}
+            </Text>
+          </View>
+        )}
       </View>
 
       <Pressable onPress={onCancel} style={styles.secondaryButton}>
@@ -64,6 +72,8 @@ const styles = StyleSheet.create({
   statusDotActive: { backgroundColor: '#16a34a' },
   statusText: { color: '#334155', fontWeight: '700' },
   routeBox: { marginTop: 14, padding: 14, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, backgroundColor: '#ffffff' },
+  fareBox: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
+  fareText: { marginTop: 3, color: '#111827', fontWeight: '900' },
   label: { marginTop: 6, color: '#64748b', fontWeight: '700' },
   address: { marginTop: 3, fontSize: 16, fontWeight: '800', color: '#111827' },
   secondaryButton: { height: 48, marginTop: 18, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#fecaca', borderRadius: 8, backgroundColor: '#fff1f2' },

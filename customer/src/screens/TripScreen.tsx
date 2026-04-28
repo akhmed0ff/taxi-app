@@ -37,6 +37,15 @@ export function TripScreen({ onCancel, order }: TripScreenProps) {
         <Text style={styles.routeText}>
           {order.pickup.address ?? 'Точка подачи'} → {order.dropoff.address ?? 'Точка назначения'}
         </Text>
+        {order.fareBreakdown && (
+          <View style={styles.fareBox}>
+            <FareRow label="Подача" value={order.fareBreakdown.baseFareAmount} />
+            <FareRow label={`${order.fareBreakdown.distanceKm} км`} value={order.fareBreakdown.distanceAmount} />
+            <FareRow label="Ожидание" value={order.fareBreakdown.waitingAmount} />
+            <FareRow label="Остановки" value={order.fareBreakdown.stopAmount} />
+            <FareRow strong label="Итого" value={order.fareBreakdown.total} />
+          </View>
+        )}
 
         <View style={styles.progressBox}>
           <ProgressStep active label="Водитель найден" />
@@ -69,6 +78,25 @@ function ProgressStep({ active, label }: { active: boolean; label: string }) {
     <View style={styles.progressStep}>
       <View style={[styles.progressDot, active && styles.progressDotActive]} />
       <Text style={[styles.progressText, active && styles.progressTextActive]}>{label}</Text>
+    </View>
+  );
+}
+
+function FareRow({
+  label,
+  strong = false,
+  value,
+}: {
+  label: string;
+  strong?: boolean;
+  value: number;
+}) {
+  return (
+    <View style={styles.fareRow}>
+      <Text style={[styles.fareLabel, strong && styles.fareStrong]}>{label}</Text>
+      <Text style={[styles.fareValue, strong && styles.fareStrong]}>
+        {value.toLocaleString('ru-RU')} {t('som')}
+      </Text>
     </View>
   );
 }
@@ -114,6 +142,11 @@ const styles = StyleSheet.create({
   driverName: { marginTop: 12, fontSize: 22, fontWeight: '800', color: '#111827' },
   driverMeta: { marginTop: 4, color: '#64748b' },
   routeText: { marginTop: 10, color: '#334155', fontWeight: '700' },
+  fareBox: { marginTop: 12, padding: 12, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, backgroundColor: '#f8fafc' },
+  fareRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  fareLabel: { color: '#64748b', fontWeight: '700' },
+  fareValue: { color: '#111827', fontWeight: '800' },
+  fareStrong: { color: '#111827', fontWeight: '900' },
   progressBox: { marginTop: 14, flexDirection: 'row', gap: 8 },
   progressStep: { flex: 1, minHeight: 54, padding: 8, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, backgroundColor: '#f8fafc' },
   progressDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#cbd5e1' },
