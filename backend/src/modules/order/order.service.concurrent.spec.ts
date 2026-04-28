@@ -127,6 +127,7 @@ async function main() {
       emitToDriver: () => undefined,
       emitToPassenger: () => undefined,
       emitToOrder: () => undefined,
+      emitToAdmins: () => undefined,
     } as never,
     {} as never,
   );

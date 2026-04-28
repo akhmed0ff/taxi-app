@@ -1,13 +1,85 @@
-import type { activeOrders, analytics, drivers, revenueByDay, tariffs } from '@/data/mock';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
-export const ENABLE_ADMIN_MOCK_FALLBACK = process.env.NODE_ENV !== 'production';
+export type OrderStatus =
+  | 'SEARCHING_DRIVER'
+  | 'DRIVER_ASSIGNED'
+  | 'DRIVER_ARRIVED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED';
 
-type AdminDriver = (typeof drivers)[number];
-type AdminOrder = (typeof activeOrders)[number];
-type AdminTariff = (typeof tariffs)[number];
-type AdminAnalytics = typeof analytics;
-type AdminRevenuePoint = (typeof revenueByDay)[number];
+export type DriverStatus = 'ONLINE' | 'BUSY' | 'OFFLINE';
+export type DocumentStatus = 'VERIFIED' | 'PENDING' | 'REJECTED';
+
+export interface AdminDriver {
+  id: string;
+  name: string;
+  phone: string;
+  car: string;
+  status: DriverStatus;
+  rating: number;
+  documents: DocumentStatus;
+  blocked: boolean;
+  balance: number;
+  tripsToday: number;
+  lat: number;
+  lng: number;
+}
+
+export interface AdminOrder {
+  id: string;
+  passenger: string;
+  driver: string;
+  status: OrderStatus;
+  route: string;
+  fare: number;
+  eta: string;
+  createdAt: string;
+  pickup: string;
+  destination: string;
+  lat: number;
+  lng: number;
+}
+
+export interface AdminTariff {
+  key: string;
+  name: string;
+  baseFare: number;
+  perKm: number;
+  perMinute: number;
+  surge: number;
+  active: boolean;
+}
+
+export interface AdminAnalyticsSummary {
+  tripsToday: number;
+  revenueToday: number;
+  activeDrivers: number;
+  completionRate: number;
+  acceptanceRate: number;
+  averageCheck: number;
+  cancelledTrips: number;
+  driverPayouts: number;
+  revenueByDay: Array<{ day: string; revenue: number; trips: number }>;
+  tariffs: AdminTariff[];
+}
+
+export interface AdminRideDetails extends AdminOrder {
+  customerPhone: string;
+  driverPhone: string;
+  tariffClass: string;
+  distanceKm: number;
+  waitingMinutes: number;
+  stopMinutes: number;
+  cancelReason?: string;
+  paymentStatus: string;
+  paymentMethod: string;
+  statusHistory: Array<{
+    status: string;
+    reason?: string;
+    createdAt: string;
+  }>;
+}
 
 interface BackendUser {
   id: string;
@@ -38,7 +110,7 @@ interface BackendDriver {
 
 interface BackendRide {
   id: string;
-  status: AdminOrder['status'];
+  status: OrderStatus;
   pickupLat: number;
   pickupLng: number;
   pickupAddress?: string;
@@ -78,29 +150,16 @@ interface BackendTariff {
   active: boolean;
 }
 
+export const statusLabels: Record<OrderStatus, string> = {
+  SEARCHING_DRIVER: 'Поиск водителя',
+  DRIVER_ASSIGNED: 'Водитель назначен',
+  DRIVER_ARRIVED: 'Водитель на месте',
+  IN_PROGRESS: 'В поездке',
+  COMPLETED: 'Завершена',
+  CANCELLED: 'Отменена',
+};
+
 let adminAccessToken: string | undefined;
-
-export interface AdminRideDetails extends AdminOrder {
-  customerPhone: string;
-  driverPhone: string;
-  tariffClass: string;
-  distanceKm: number;
-  waitingMinutes: number;
-  stopMinutes: number;
-  cancelReason?: string;
-  paymentStatus: string;
-  paymentMethod: string;
-  statusHistory: Array<{
-    status: string;
-    reason?: string;
-    createdAt: string;
-  }>;
-}
-
-export interface AdminAnalyticsSummary extends AdminAnalytics {
-  revenueByDay: AdminRevenuePoint[];
-  tariffs: AdminTariff[];
-}
 
 export async function fetchAdminDrivers() {
   const data = await apiFetch<BackendDriver[]>('/drivers');
@@ -136,7 +195,7 @@ export async function saveTariff(tariff: AdminTariff) {
   const data = await apiFetch<BackendTariff>(`/admin/tariffs/${tariff.key}`, {
     method: 'PATCH',
     body: JSON.stringify({
-      city: tariff.name,
+      city: 'Angren',
       tariffClass: normalizeTariffClass(tariff.name),
       baseFare: tariff.baseFare,
       perKm: tariff.perKm,
@@ -149,6 +208,66 @@ export async function saveTariff(tariff: AdminTariff) {
   });
 
   return mapBackendTariff(data);
+}
+
+export async function getAdminAccessToken() {
+  if (adminAccessToken) {
+    return adminAccessToken;
+  }
+
+  const phone = process.env.NEXT_PUBLIC_ADMIN_PHONE ?? '+998900000001';
+  const password = process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? 'password123';
+  const loginResponse = await fetch(`${API_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, password }),
+  });
+
+  if (loginResponse.ok) {
+    const data = await loginResponse.json();
+    adminAccessToken = data.accessToken;
+    return adminAccessToken;
+  }
+
+  const devLoginResponse = await fetch(`${API_URL}/auth/dev-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      phone,
+      name: 'Admin Dispatcher',
+      role: 'ADMIN',
+    }),
+  });
+
+  if (!devLoginResponse.ok) {
+    throw new Error(await readError(devLoginResponse, 'Admin login failed'));
+  }
+
+  const data = await devLoginResponse.json();
+  adminAccessToken = data.accessToken;
+  return adminAccessToken;
+}
+
+export function formatSom(value: number) {
+  return `${value.toLocaleString('ru-RU')} сум`;
+}
+
+export function mapGeoToPanelPosition(lat: number, lng: number) {
+  const bounds = {
+    minLat: 40.93,
+    maxLat: 41.1,
+    minLng: 70.04,
+    maxLng: 70.24,
+  };
+
+  const top =
+    100 - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * 100;
+  const left = ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 100;
+
+  return {
+    lat: clamp(top, 8, 92),
+    lng: clamp(left, 8, 92),
+  };
 }
 
 async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -169,51 +288,6 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.json();
 }
 
-async function getAdminAccessToken() {
-  if (adminAccessToken) {
-    return adminAccessToken;
-  }
-
-  const phone = process.env.NEXT_PUBLIC_ADMIN_PHONE ?? '+998900000001';
-  const password = process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? 'password123';
-  const loginResponse = await fetch(`${API_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      phone,
-      password,
-    }),
-  });
-
-  if (loginResponse.ok) {
-    const data = await loginResponse.json();
-    adminAccessToken = data.accessToken;
-    return adminAccessToken;
-  }
-
-  if (!ENABLE_ADMIN_MOCK_FALLBACK) {
-    throw new Error(await readError(loginResponse, 'Admin login failed'));
-  }
-
-  const devLoginResponse = await fetch(`${API_URL}/auth/dev-login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      phone,
-      name: 'Admin Dispatcher',
-      role: 'ADMIN',
-    }),
-  });
-
-  if (!devLoginResponse.ok) {
-    throw new Error(await readError(devLoginResponse, 'Admin dev-login failed'));
-  }
-
-  const data = await devLoginResponse.json();
-  adminAccessToken = data.accessToken;
-  return adminAccessToken;
-}
-
 function mapBackendDriver(driver: BackendDriver): AdminDriver {
   const documents = driver.documents ?? [];
   const documentStatus =
@@ -226,7 +300,7 @@ function mapBackendDriver(driver: BackendDriver): AdminDriver {
 
   return {
     id: driver.id,
-    name: driver.user?.name ?? 'Driver',
+    name: driver.user?.name ?? 'Водитель',
     phone: driver.user?.phone ?? '-',
     car: formatVehicle(driver.vehicle),
     status: isKnownDriverStatus(status) ? status : 'OFFLINE',
@@ -240,21 +314,21 @@ function mapBackendDriver(driver: BackendDriver): AdminDriver {
 }
 
 function mapBackendRide(ride: BackendRide): AdminOrder {
-  const pickup = ride.pickupAddress ?? 'Pickup';
-  const destination = ride.dropoffAddress ?? 'Dropoff';
+  const pickup = ride.pickupAddress ?? 'Точка подачи';
+  const destination = ride.dropoffAddress ?? 'Точка назначения';
 
   return {
     id: ride.id,
-    passenger: ride.customer?.name ?? ride.customer?.phone ?? 'Passenger',
+    passenger: ride.customer?.name ?? ride.customer?.phone ?? 'Пассажир',
     driver: ride.driver?.user?.name ?? 'Назначается',
     status: ride.status,
     route: `${pickup} -> ${destination}`,
     fare: ride.finalFare ?? ride.estimatedFare ?? 0,
-    eta: ride.status === 'SEARCHING_DRIVER' ? 'поиск' : '4 мин',
+    eta: ride.status === 'SEARCHING_DRIVER' ? 'поиск' : 'live',
     createdAt: formatTime(ride.createdAt),
     pickup,
     destination,
-    ...stableMapPosition(ride.id),
+    ...mapGeoToPanelPosition(ride.pickupLat, ride.pickupLng),
   };
 }
 
@@ -308,7 +382,7 @@ function formatVehicle(vehicle?: BackendVehicle) {
   return `${vehicle.make} ${vehicle.model} ${vehicle.plateNumber}`;
 }
 
-function isKnownDriverStatus(status: string): status is AdminDriver['status'] {
+function isKnownDriverStatus(status: string): status is DriverStatus {
   return status === 'ONLINE' || status === 'BUSY' || status === 'OFFLINE';
 }
 
@@ -380,6 +454,10 @@ function buildBasicAnalytics(
     ],
     tariffs: tariffList,
   };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 async function readError(response: Response, fallback: string) {

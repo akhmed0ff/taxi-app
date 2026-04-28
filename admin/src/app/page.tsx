@@ -2,6 +2,7 @@
 
 import {
   Alert,
+  Badge,
   Card,
   Col,
   Descriptions,
@@ -13,89 +14,103 @@ import {
   Timeline,
   Typography,
 } from 'antd';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActiveOrdersTable } from '@/components/ActiveOrdersTable';
 import { AdminShell } from '@/components/AdminShell';
 import { MetricCard } from '@/components/MetricCard';
 import { OrdersMap } from '@/components/OrdersMap';
 import {
-  activeOrders as fallbackActiveOrders,
-  drivers as fallbackDrivers,
-  formatSom,
-  statusLabels,
-} from '@/data/mock';
-import {
+  AdminDriver,
+  AdminOrder,
   AdminRideDetails,
-  ENABLE_ADMIN_MOCK_FALLBACK,
   fetchActiveOrders,
   fetchAdminDrivers,
   fetchRideDetails,
+  formatSom,
+  mapGeoToPanelPosition,
+  statusLabels,
 } from '@/services/api';
+import { AdminRealtimeClient } from '@/services/realtime';
+
+type LiveState = 'connecting' | 'connected' | 'offline';
 
 export default function MonitoringPage() {
-  const [activeOrders, setActiveOrders] = useState<typeof fallbackActiveOrders>(
-    ENABLE_ADMIN_MOCK_FALLBACK ? fallbackActiveOrders : [],
-  );
-  const [drivers, setDrivers] = useState<typeof fallbackDrivers>(
-    ENABLE_ADMIN_MOCK_FALLBACK ? fallbackDrivers : [],
-  );
+  const [activeOrders, setActiveOrders] = useState<AdminOrder[]>([]);
+  const [drivers, setDrivers] = useState<AdminDriver[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [rideDetails, setRideDetails] = useState<AdminRideDetails>();
   const [error, setError] = useState<string>();
-  const searchingOrders = activeOrders.filter(
-    (order) => order.status === 'SEARCHING_DRIVER',
-  );
-  const activeRevenue = activeOrders.reduce((sum, order) => sum + order.fare, 0);
-  const assignedOrders = activeOrders.filter(
-    (order) => order.status !== 'SEARCHING_DRIVER',
-  ).length;
-  const assignmentRate =
-    activeOrders.length > 0
-      ? Math.round((assignedOrders / activeOrders.length) * 100)
-      : 0;
+  const [liveState, setLiveState] = useState<LiveState>('connecting');
+
+  const loadDashboard = useCallback(async () => {
+    setError(undefined);
+
+    try {
+      const [nextOrders, nextDrivers] = await Promise.all([
+        fetchActiveOrders(),
+        fetchAdminDrivers(),
+      ]);
+
+      setActiveOrders(nextOrders);
+      setDrivers((current) => mergeDriverPositions(nextDrivers, current));
+      setLiveState('connected');
+    } catch (nextError) {
+      console.warn(nextError);
+      setActiveOrders([]);
+      setDrivers([]);
+      setLiveState('offline');
+      setError('Backend API недоступен. Админка показывает только реальные данные, mock fallback отключён.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
     let cancelled = false;
+    const realtime = new AdminRealtimeClient();
 
-    async function loadDashboard() {
-      setLoading(true);
-      setError(undefined);
-
+    async function connectRealtime() {
       try {
-        const [nextOrders, nextDrivers] = await Promise.all([
-          fetchActiveOrders(),
-          fetchAdminDrivers(),
-        ]);
+        setLiveState('connecting');
+        cleanup = await realtime.connect({
+          ORDER_UPDATED: () => void loadDashboard(),
+          DRIVER_UPDATED: (payload) => {
+            if (isDriverLocationPayload(payload)) {
+              setDrivers((current) =>
+                applyLiveDriverLocation(current, payload.driverId, payload.lat, payload.lng),
+              );
+              return;
+            }
+
+            void loadDashboard();
+          },
+        });
 
         if (!cancelled) {
-          setActiveOrders(nextOrders);
-          setDrivers(nextDrivers);
+          setLiveState('connected');
         }
       } catch (nextError) {
+        console.warn(nextError);
+
         if (!cancelled) {
-          console.warn(nextError);
-          setActiveOrders(ENABLE_ADMIN_MOCK_FALLBACK ? fallbackActiveOrders : []);
-          setDrivers(ENABLE_ADMIN_MOCK_FALLBACK ? fallbackDrivers : []);
-          setError(
-            ENABLE_ADMIN_MOCK_FALLBACK
-              ? 'Backend недоступен. Показаны fallback mock-данные.'
-              : 'Backend API unavailable. Mock fallback is disabled in production.',
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
+          setLiveState('offline');
         }
       }
     }
 
-    void loadDashboard();
+    void connectRealtime();
 
     return () => {
       cancelled = true;
+      cleanup?.();
     };
-  }, []);
+  }, [loadDashboard]);
 
   async function openRideDetails(rideId: string) {
     setDetailsLoading(true);
@@ -110,39 +125,69 @@ export default function MonitoringPage() {
     }
   }
 
+  const metrics = useMemo(() => {
+    const searchingOrders = activeOrders.filter(
+      (order) => order.status === 'SEARCHING_DRIVER',
+    );
+    const activeRevenue = activeOrders.reduce((sum, order) => sum + order.fare, 0);
+    const onlineDrivers = drivers.filter((driver) => driver.status === 'ONLINE').length;
+    const busyDrivers = drivers.filter((driver) => driver.status === 'BUSY').length;
+    const assignedOrders = activeOrders.filter(
+      (order) => order.status !== 'SEARCHING_DRIVER',
+    ).length;
+    const assignmentRate =
+      activeOrders.length > 0
+        ? Math.round((assignedOrders / activeOrders.length) * 100)
+        : 0;
+
+    return {
+      activeRevenue,
+      assignmentRate,
+      busyDrivers,
+      onlineDrivers,
+      searchingOrders,
+    };
+  }, [activeOrders, drivers]);
+
   return (
     <AdminShell>
       <Space direction="vertical" size={20} style={{ width: '100%' }}>
         <div>
-          <Typography.Title level={2} style={{ margin: 0 }}>
-            Мониторинг заказов
-          </Typography.Title>
+          <Space align="center" wrap>
+            <Typography.Title level={2} style={{ margin: 0 }}>
+              Мониторинг заказов
+            </Typography.Title>
+            <Badge
+              status={liveState === 'connected' ? 'success' : liveState === 'connecting' ? 'processing' : 'error'}
+              text={liveState === 'connected' ? 'live' : liveState === 'connecting' ? 'подключение' : 'offline'}
+            />
+          </Space>
           <Typography.Text type="secondary">
             Активные поездки, карта водителей и очередь назначений.
           </Typography.Text>
         </div>
 
-        {error && <Alert message={error} type="warning" showIcon />}
+        {error && <Alert message={error} type="error" showIcon />}
 
         <Row gutter={[16, 16]}>
           <Col xs={24} md={12} xl={6}>
-            <MetricCard title="Поездки сегодня" value={activeOrders.length} />
+            <MetricCard title="Активные поездки" value={activeOrders.length} />
           </Col>
           <Col xs={24} md={12} xl={6}>
-            <MetricCard title="Доход" value={activeRevenue} suffix="сум" />
+            <MetricCard title="Активный доход" value={metrics.activeRevenue} suffix="сум" />
           </Col>
           <Col xs={24} md={12} xl={6}>
-            <MetricCard title="Водители онлайн" value={drivers.filter((driver) => driver.status !== 'OFFLINE').length} />
+            <MetricCard title="Водители ONLINE" value={metrics.onlineDrivers} />
           </Col>
           <Col xs={24} md={12} xl={6}>
-            <MetricCard title="Назначение" value={assignmentRate} suffix="%" />
+            <MetricCard title="Водители BUSY" value={metrics.busyDrivers} />
           </Col>
         </Row>
 
-        {searchingOrders.length > 0 && (
+        {metrics.searchingOrders.length > 0 && (
           <Alert
-            message={`${searchingOrders.length} заказ ожидает назначения водителя`}
-            description="Проверьте ближайших свободных водителей или дождитесь расширения радиуса matching."
+            message={`${metrics.searchingOrders.length} заказ ожидает назначения водителя`}
+            description="Matching ещё ищет ближайшего ONLINE водителя."
             type="warning"
             showIcon
           />
@@ -153,16 +198,29 @@ export default function MonitoringPage() {
             <OrdersMap driverList={drivers} loading={loading} orders={activeOrders} />
           </Col>
           <Col xs={24} xl={8}>
-            <Card loading={loading} title="Очередь диспетчера">
+            <Card loading={loading} title="Статус системы">
+              <Descriptions column={1} size="small">
+                <Descriptions.Item label="API">
+                  <Tag color={error ? 'red' : 'green'}>{error ? 'ERROR' : 'OK'}</Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="Socket.IO">
+                  <Tag color={liveState === 'connected' ? 'green' : liveState === 'connecting' ? 'blue' : 'red'}>
+                    {liveState.toUpperCase()}
+                  </Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="Назначение">{metrics.assignmentRate}%</Descriptions.Item>
+              </Descriptions>
+
               <List
                 dataSource={activeOrders}
+                locale={{ emptyText: 'Нет активных заказов' }}
                 renderItem={(order) => (
                   <List.Item>
                     <List.Item.Meta
                       title={
                         <Space>
                           <Typography.Text strong>{order.id}</Typography.Text>
-                          <Tag>{statusLabels[order.status]}</Tag>
+                          <Tag>{statusLabels[order.status] ?? order.status}</Tag>
                         </Space>
                       }
                       description={`${order.pickup} -> ${order.destination}`}
@@ -222,5 +280,42 @@ export default function MonitoringPage() {
         </Drawer>
       </Space>
     </AdminShell>
+  );
+}
+
+function mergeDriverPositions(nextDrivers: AdminDriver[], currentDrivers: AdminDriver[]) {
+  const currentById = new Map(currentDrivers.map((driver) => [driver.id, driver]));
+
+  return nextDrivers.map((driver) => {
+    const current = currentById.get(driver.id);
+    return current ? { ...driver, lat: current.lat, lng: current.lng } : driver;
+  });
+}
+
+function applyLiveDriverLocation(
+  drivers: AdminDriver[],
+  driverId: string,
+  lat: number,
+  lng: number,
+) {
+  const position = mapGeoToPanelPosition(lat, lng);
+
+  return drivers.map((driver) =>
+    driver.id === driverId ? { ...driver, ...position } : driver,
+  );
+}
+
+function isDriverLocationPayload(
+  payload: unknown,
+): payload is { driverId: string; lat: number; lng: number } {
+  if (!payload || typeof payload !== 'object') {
+    return false;
+  }
+
+  const candidate = payload as Record<string, unknown>;
+  return (
+    typeof candidate.driverId === 'string' &&
+    typeof candidate.lat === 'number' &&
+    typeof candidate.lng === 'number'
   );
 }

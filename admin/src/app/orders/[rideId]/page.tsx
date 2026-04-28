@@ -5,8 +5,7 @@ import { Alert, Button, Card, Descriptions, Space, Spin, Tag, Timeline, Typograp
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
-import { formatSom, statusLabels } from '@/data/mock';
-import { AdminRideDetails, fetchRideDetails } from '@/services/api';
+import { AdminRideDetails, fetchRideDetails, formatSom, statusLabels } from '@/services/api';
 
 interface OrderDetailsPageProps {
   params: {

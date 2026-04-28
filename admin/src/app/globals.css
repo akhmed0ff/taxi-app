@@ -80,6 +80,14 @@ body {
   top: 16px;
 }
 
+.map-empty {
+  align-items: center;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: absolute;
+}
+
 .map-marker {
   align-items: center;
   border: 2px solid #ffffff;

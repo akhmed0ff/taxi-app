@@ -6,18 +6,25 @@ import { useEffect, useMemo, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
 import { MetricCard } from '@/components/MetricCard';
 import {
-  analytics as fallbackAnalytics,
-  formatSom,
-  revenueByDay as fallbackRevenueByDay,
-  tariffs as fallbackTariffs,
-} from '@/data/mock';
-import {
   AdminAnalyticsSummary,
-  ENABLE_ADMIN_MOCK_FALLBACK,
   fetchAdminAnalytics,
+  formatSom,
 } from '@/services/api';
 
-type RevenuePoint = (typeof fallbackRevenueByDay)[number];
+type RevenuePoint = AdminAnalyticsSummary['revenueByDay'][number];
+
+const emptySummary: AdminAnalyticsSummary = {
+  tripsToday: 0,
+  revenueToday: 0,
+  activeDrivers: 0,
+  completionRate: 0,
+  acceptanceRate: 0,
+  averageCheck: 0,
+  cancelledTrips: 0,
+  driverPayouts: 0,
+  revenueByDay: [],
+  tariffs: [],
+};
 
 const columns: ColumnsType<RevenuePoint> = [
   { title: 'День', dataIndex: 'day' },
@@ -31,11 +38,7 @@ const columns: ColumnsType<RevenuePoint> = [
 ];
 
 export default function AnalyticsPage() {
-  const [summary, setSummary] = useState<AdminAnalyticsSummary>({
-    ...fallbackAnalytics,
-    revenueByDay: ENABLE_ADMIN_MOCK_FALLBACK ? fallbackRevenueByDay : [],
-    tariffs: ENABLE_ADMIN_MOCK_FALLBACK ? fallbackTariffs : [],
-  });
+  const [summary, setSummary] = useState<AdminAnalyticsSummary>(emptySummary);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const maxRevenue = useMemo(
@@ -59,16 +62,8 @@ export default function AnalyticsPage() {
       } catch (nextError) {
         if (!cancelled) {
           console.warn(nextError);
-          setSummary({
-            ...fallbackAnalytics,
-            revenueByDay: ENABLE_ADMIN_MOCK_FALLBACK ? fallbackRevenueByDay : [],
-            tariffs: ENABLE_ADMIN_MOCK_FALLBACK ? fallbackTariffs : [],
-          });
-          setError(
-            ENABLE_ADMIN_MOCK_FALLBACK
-              ? 'Backend недоступен. Показаны fallback mock-данные.'
-              : 'Backend API unavailable. Mock fallback is disabled in production.',
-          );
+          setSummary(emptySummary);
+          setError('Backend API недоступен. Mock fallback отключён.');
         }
       } finally {
         if (!cancelled) {
@@ -96,7 +91,7 @@ export default function AnalyticsPage() {
           </Typography.Text>
         </div>
 
-        {error && <Alert message={error} type="warning" showIcon />}
+        {error && <Alert message={error} type="error" showIcon />}
 
         <Row gutter={[16, 16]}>
           <Col xs={24} md={12} xl={6}>

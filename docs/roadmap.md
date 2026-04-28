@@ -128,7 +128,8 @@ Done when:
 - Admin can load drivers from `GET /drivers`.
 - Admin can load and save tariffs through `/admin/tariffs`.
 - Loading and error states are visible when backend calls are pending or fail.
-- Mock data is used only as a development fallback and is disabled in production builds.
+- Admin uses backend API data only; mock fallback data has been removed.
+- Admin receives live dashboard updates through Socket.IO `ORDER_UPDATED` and `DRIVER_UPDATED`.
 - Operations metrics are visible.
 - Admin can open a ride details page from the active orders table.
 
@@ -188,7 +189,7 @@ Already started:
 - Ride matching queue.
 - Passenger and driver Expo app prototypes.
 - Admin panel prototype.
-- Admin panel connected to backend API for drivers, active orders, tariffs and basic analytics with development-only mock fallback.
+- Admin panel connected to backend API for drivers, active orders, tariffs and basic analytics with Socket.IO live refresh.
 - Ride history endpoints for passenger and driver with `active`, `completed` and `cancelled` filters.
 - Passenger and driver apps show ride history.
 - Admin can open ride details with passenger, driver, route, fare and status history.

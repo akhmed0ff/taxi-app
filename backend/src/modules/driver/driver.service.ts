@@ -58,6 +58,8 @@ export class DriverService {
       await this.geo.removeDriverLocation(driverId);
     }
 
+    this.socket.emitToAdmins(RealtimeEvent.DRIVER_UPDATED, driver);
+
     return driver;
   }
 
@@ -113,12 +115,16 @@ export class DriverService {
       });
     }
 
-    return {
+    const locationUpdate = {
       rideId: activeRide?.id,
       driverId,
       lat,
       lng,
     };
+
+    this.socket.emitToAdmins(RealtimeEvent.DRIVER_UPDATED, locationUpdate);
+
+    return locationUpdate;
   }
 
   private async assertDriverAccess(driverId: string, user?: AuthUser) {

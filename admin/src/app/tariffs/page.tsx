@@ -5,16 +5,12 @@ import { Alert, Button, Card, InputNumber, Space, Switch, Table, Typography, mes
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
-import { formatSom, tariffs as initialTariffs } from '@/data/mock';
-import { ENABLE_ADMIN_MOCK_FALLBACK, fetchTariffs, saveTariff } from '@/services/api';
+import { AdminTariff, fetchTariffs, formatSom, saveTariff } from '@/services/api';
 
-type Tariff = (typeof initialTariffs)[number];
 type NumericTariffField = 'baseFare' | 'perKm' | 'perMinute' | 'surge';
 
 export default function TariffsPage() {
-  const [tariffs, setTariffs] = useState<typeof initialTariffs>(
-    ENABLE_ADMIN_MOCK_FALLBACK ? initialTariffs : [],
-  );
+  const [tariffs, setTariffs] = useState<AdminTariff[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string>();
   const [error, setError] = useState<string>();
@@ -31,21 +27,13 @@ export default function TariffsPage() {
         const nextTariffs = await fetchTariffs();
 
         if (!cancelled) {
-          setTariffs(
-            nextTariffs.length > 0 || !ENABLE_ADMIN_MOCK_FALLBACK
-              ? nextTariffs
-              : initialTariffs,
-          );
+          setTariffs(nextTariffs);
         }
       } catch (nextError) {
         if (!cancelled) {
           console.warn(nextError);
-          setTariffs(ENABLE_ADMIN_MOCK_FALLBACK ? initialTariffs : []);
-          setError(
-            ENABLE_ADMIN_MOCK_FALLBACK
-              ? 'Backend недоступен. Показаны fallback mock-данные.'
-              : 'Backend API unavailable. Mock fallback is disabled in production.',
-          );
+          setTariffs([]);
+          setError('Backend API недоступен. Mock fallback отключён.');
         }
       } finally {
         if (!cancelled) {
@@ -75,7 +63,7 @@ export default function TariffsPage() {
     );
   };
 
-  const handleSaveTariff = async (tariff: Tariff) => {
+  const handleSaveTariff = async (tariff: AdminTariff) => {
     setSavingKey(tariff.key);
 
     try {
@@ -86,17 +74,17 @@ export default function TariffsPage() {
         ),
       );
       setError(undefined);
-      api.success(`Тариф "${savedTariff.name}" сохранен`);
+      api.success(`Тариф "${savedTariff.name}" сохранён`);
     } catch (nextError) {
       console.warn(nextError);
-      setError('Не удалось сохранить тариф в backend. Fallback-данные остались локально.');
+      setError('Не удалось сохранить тариф в backend.');
       api.error('Не удалось сохранить тариф');
     } finally {
       setSavingKey(undefined);
     }
   };
 
-  const columns = useMemo<ColumnsType<Tariff>>(
+  const columns = useMemo<ColumnsType<AdminTariff>>(
     () => [
       {
         title: 'Класс',
@@ -135,7 +123,7 @@ export default function TariffsPage() {
         ),
       },
       {
-        title: 'Цена / мин',
+        title: 'Ожидание / мин',
         dataIndex: 'perMinute',
         render: (value: number, record) => (
           <InputNumber
@@ -195,11 +183,11 @@ export default function TariffsPage() {
             Тарифы
           </Typography.Title>
           <Typography.Text type="secondary">
-            Настройка подачи, километража, минут и коэффициента спроса.
+            Настройка подачи, километража и ожидания для ANGREN TAXI.
           </Typography.Text>
         </div>
 
-        {error && <Alert message={error} type="warning" showIcon />}
+        {error && <Alert message={error} type="error" showIcon />}
 
         <Card>
           <Table

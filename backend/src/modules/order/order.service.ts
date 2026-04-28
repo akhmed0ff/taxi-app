@@ -84,6 +84,7 @@ export class OrderService {
 
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.NEW_ORDER, ride);
     this.socket.emitToOrder(ride.id, RealtimeEvent.NEW_ORDER, ride);
+    this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, ride);
 
     return ride;
   }
@@ -245,6 +246,11 @@ export class OrderService {
     this.socket.emitToDriver(driverId, RealtimeEvent.DRIVER_ACCEPTED, ride);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.DRIVER_ACCEPTED, ride);
     this.socket.emitToOrder(ride.id, RealtimeEvent.DRIVER_ACCEPTED, ride);
+    this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, ride);
+    this.socket.emitToAdmins(RealtimeEvent.DRIVER_UPDATED, {
+      id: driverId,
+      status: DriverStatusValue.BUSY,
+    });
 
     return ride;
   }
@@ -255,6 +261,7 @@ export class OrderService {
 
     this.socket.emitToOrder(ride.id, RealtimeEvent.DRIVER_ARRIVED, ride);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.DRIVER_ARRIVED, ride);
+    this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, ride);
     return ride;
   }
 
@@ -263,6 +270,7 @@ export class OrderService {
     const ride = await this.transitionRide(rideId, OrderStatusValue.IN_PROGRESS);
 
     this.socket.emitToOrder(ride.id, RealtimeEvent.TRIP_STARTED, ride);
+    this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, ride);
     return ride;
   }
 
@@ -307,11 +315,16 @@ export class OrderService {
         where: { id: ride.driverId },
         data: { status: DriverStatusValue.ONLINE },
       });
+      this.socket.emitToAdmins(RealtimeEvent.DRIVER_UPDATED, {
+        id: ride.driverId,
+        status: DriverStatusValue.ONLINE,
+      });
     }
 
     const payload = { ride, payment };
     this.socket.emitToOrder(ride.id, RealtimeEvent.TRIP_COMPLETED, payload);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.TRIP_COMPLETED, payload);
+    this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, payload);
 
     return payload;
   }
@@ -349,10 +362,15 @@ export class OrderService {
         where: { id: ride.driverId },
         data: { status: DriverStatusValue.ONLINE },
       });
+      this.socket.emitToAdmins(RealtimeEvent.DRIVER_UPDATED, {
+        id: ride.driverId,
+        status: DriverStatusValue.ONLINE,
+      });
     }
 
     const payload = { ride: cancelledRide, reason };
     this.socket.emitToOrder(cancelledRide.id, RealtimeEvent.RIDE_CANCELLED, payload);
+    this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, payload);
     this.socket.emitToPassenger(
       cancelledRide.customerId,
       RealtimeEvent.RIDE_CANCELLED,
@@ -389,6 +407,7 @@ export class OrderService {
 
     this.socket.emitToOrder(ride.id, RealtimeEvent.PAYMENT_COMPLETED, payload);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.PAYMENT_COMPLETED, payload);
+    this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, payload);
 
     return payload;
   }

@@ -59,6 +59,10 @@ export class SocketGateway implements OnGatewayConnection {
         void client.join(`passenger:${userId}`);
       }
 
+      if (payload.role === UserRoleValue.ADMIN) {
+        void client.join('admin');
+      }
+
       if (payload.role === UserRoleValue.DRIVER) {
         const driver = await this.prisma.driver.findUnique({
           where: { userId },
@@ -103,6 +107,10 @@ export class SocketGateway implements OnGatewayConnection {
 
   emitToOrder(orderId: string, event: string, payload: unknown) {
     this.server.to(`order:${orderId}`).emit(event, payload);
+  }
+
+  emitToAdmins(event: string, payload: unknown) {
+    this.server.to('admin').emit(event, payload);
   }
 
   private extractAccessToken(client: Socket) {

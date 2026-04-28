@@ -104,6 +104,7 @@ export class MatchingService {
       RealtimeEvent.MATCHING_FAILED,
       cancelledRide,
     );
+    this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, cancelledRide);
 
     return cancelledRide;
   }

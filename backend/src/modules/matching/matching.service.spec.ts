@@ -69,6 +69,8 @@ function createMatchingMock() {
       state.emitted.push({ driverId, event, payload }),
     emitToOrder: (driverId: string, event: string, payload: unknown) =>
       state.emitted.push({ driverId, event, payload }),
+    emitToAdmins: (event: string, payload: unknown) =>
+      state.emitted.push({ driverId: 'admin', event, payload }),
   };
   const service = new MatchingService(
     prisma as never,

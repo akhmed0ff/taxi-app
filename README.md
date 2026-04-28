@@ -144,8 +144,9 @@ Admin backend API:
 
 - `NEXT_PUBLIC_API_URL` points the admin panel to the backend, default `http://localhost:3000`.
 - `NEXT_PUBLIC_ADMIN_PHONE` and `NEXT_PUBLIC_ADMIN_PASSWORD` are used for admin login.
-- In development only, if admin login fails, the panel may use `/auth/dev-login` and mock fallback data.
-- In production, mock fallback is disabled; drivers, active orders, tariffs and basic analytics must come from the backend API.
+- If admin login fails in development, the panel may use `/auth/dev-login`.
+- Mock data has been removed from the admin panel; drivers, active orders, tariffs and basic analytics must come from the backend API.
+- Admin Socket.IO connects with `auth: { accessToken }` and receives `ORDER_UPDATED` / `DRIVER_UPDATED` events for live dashboard refresh.
 
 Mobile:
 

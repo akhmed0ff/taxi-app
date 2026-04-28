@@ -1,30 +1,30 @@
 import { ClockCircleOutlined, EnvironmentOutlined } from '@ant-design/icons';
-import { Button, Space, Table, Tag, Typography } from 'antd';
+import { Button, Empty, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import Link from 'next/link';
-import { activeOrders, formatSom, statusLabels } from '@/data/mock';
-
-type ActiveOrder = (typeof activeOrders)[number];
+import { AdminOrder, formatSom, statusLabels } from '@/services/api';
 
 interface ActiveOrdersTableProps {
-  dataSource?: ActiveOrder[];
+  dataSource: AdminOrder[];
   loading?: boolean;
   onOpenDetails?: (orderId: string) => void;
 }
 
-const statusColors: Record<ActiveOrder['status'], string> = {
+const statusColors: Record<AdminOrder['status'], string> = {
   SEARCHING_DRIVER: 'gold',
   DRIVER_ASSIGNED: 'blue',
   DRIVER_ARRIVED: 'purple',
   IN_PROGRESS: 'green',
+  COMPLETED: 'default',
+  CANCELLED: 'red',
 };
 
 export function ActiveOrdersTable({
-  dataSource = activeOrders,
+  dataSource,
   loading = false,
   onOpenDetails,
 }: ActiveOrdersTableProps) {
-  const columns: ColumnsType<ActiveOrder> = [
+  const columns: ColumnsType<AdminOrder> = [
     {
       title: 'Заказ',
       dataIndex: 'id',
@@ -54,8 +54,8 @@ export function ActiveOrdersTable({
     {
       title: 'Статус',
       dataIndex: 'status',
-      render: (status: ActiveOrder['status']) => (
-        <Tag color={statusColors[status]}>{statusLabels[status]}</Tag>
+      render: (status: AdminOrder['status']) => (
+        <Tag color={statusColors[status]}>{statusLabels[status] ?? status}</Tag>
       ),
     },
     { title: 'ETA', dataIndex: 'eta' },
@@ -84,6 +84,7 @@ export function ActiveOrdersTable({
       columns={columns}
       dataSource={dataSource}
       loading={loading}
+      locale={{ emptyText: <Empty description="Нет активных поездок" /> }}
       pagination={false}
       rowKey="id"
       scroll={{ x: 900 }}

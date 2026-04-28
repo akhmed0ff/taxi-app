@@ -50,6 +50,14 @@ function createGateway() {
         };
       }
 
+      if (token === 'admin-token') {
+        return {
+          userId: 'admin-1',
+          sub: 'admin-1',
+          role: UserRoleValue.ADMIN,
+        };
+      }
+
       throw new Error('invalid token');
     },
   };
@@ -119,6 +127,20 @@ async function testDriverRoomsUseDatabaseProfileFromJwtUser() {
   assert.deepEqual(socket.joinedRooms, ['user:driver-user-1', 'driver:driver-1']);
 }
 
+async function testAdminJoinsAdminRoom() {
+  const gateway = createGateway();
+  const socket = createSocket({ accessToken: 'admin-token' });
+
+  await gateway.handleConnection(socket as never);
+
+  assert.equal(socket.disconnected, false);
+  assert.deepEqual(socket.data, {
+    userId: 'admin-1',
+    role: UserRoleValue.ADMIN,
+  });
+  assert.deepEqual(socket.joinedRooms, ['user:admin-1', 'admin']);
+}
+
 async function testAuthorizationHeaderTokenIsRejected() {
   const gateway = createGateway();
   const socket = createSocket({}, { authorization: 'Bearer passenger-token' });
@@ -142,6 +164,7 @@ async function testCannotJoinAnotherUsersRide() {
 async function main() {
   await testPassengerRoomsUseJwtIdentityOnly();
   await testDriverRoomsUseDatabaseProfileFromJwtUser();
+  await testAdminJoinsAdminRoom();
   await testAuthorizationHeaderTokenIsRejected();
   await testCannotJoinAnotherUsersRide();
 }

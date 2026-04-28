@@ -300,6 +300,8 @@ function createCoreFlowMock() {
       state.emittedEvents.push({ room, event, payload }),
     emitToOrder: (room: string, event: string, payload: unknown) =>
       state.emittedEvents.push({ room, event, payload }),
+    emitToAdmins: (event: string, payload: unknown) =>
+      state.emittedEvents.push({ room: 'admin', event, payload }),
   };
 
   const queue = {
