@@ -83,10 +83,12 @@ export function HistoryScreen({ accessToken, onBack }: HistoryScreenProps) {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{item.pickupAddress}</Text>
             <Text style={styles.route}>{item.dropoffAddress}</Text>
+            {item.createdAt && <Text style={styles.meta}>{formatDate(item.createdAt)}</Text>}
             <View style={styles.row}>
               <Text style={styles.status}>{statusLabel(item.status)}</Text>
               <Text style={styles.price}>{item.price.toLocaleString()} сум</Text>
             </View>
+            {item.paymentStatus && <Text style={styles.meta}>Оплата: {paymentLabel(item.paymentStatus)}</Text>}
             {item.passengerName && <Text style={styles.meta}>Пассажир: {item.passengerName}</Text>}
           </View>
         )}
@@ -108,6 +110,22 @@ function statusLabel(status: RideHistoryItem['status']) {
   if (status === 'DRIVER_ARRIVED') return 'На месте';
   if (status === 'ACCEPTED') return 'Принят';
   return status;
+}
+
+function paymentLabel(status: string) {
+  if (status === 'PENDING') return 'ожидает оплаты';
+  if (status === 'PAID') return 'оплачено';
+  if (status === 'FAILED') return 'ошибка';
+  return status;
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 const styles = StyleSheet.create({

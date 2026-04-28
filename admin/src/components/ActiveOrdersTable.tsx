@@ -1,6 +1,7 @@
 import { ClockCircleOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import Link from 'next/link';
 import { activeOrders, formatSom, statusLabels } from '@/data/mock';
 
 type ActiveOrder = (typeof activeOrders)[number];
@@ -68,9 +69,12 @@ export function ActiveOrdersTable({
       title: '',
       key: 'details',
       render: (_, record) => (
-        <Button size="small" onClick={() => onOpenDetails?.(record.id)}>
-          Детали
-        </Button>
+        <Space>
+          <Button size="small" onClick={() => onOpenDetails?.(record.id)}>
+            Детали
+          </Button>
+          <Link href={`/orders/${record.id}`}>Страница</Link>
+        </Space>
       ),
     },
   ];

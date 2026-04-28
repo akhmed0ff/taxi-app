@@ -83,6 +83,7 @@ export function HistoryScreen({ accessToken, onBack }: HistoryScreenProps) {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{item.pickup.address ?? 'Подача'}</Text>
             <Text style={styles.route}>{item.dropoff.address ?? 'Назначение'}</Text>
+            {item.createdAt && <Text style={styles.meta}>{formatDate(item.createdAt)}</Text>}
             <View style={styles.row}>
               <Text style={styles.status}>{statusLabel(item.status)}</Text>
               <Text style={styles.price}>{item.price.toLocaleString()} сум</Text>
@@ -108,6 +109,15 @@ function statusLabel(status: RideHistoryItem['status']) {
   if (status === 'DRIVER_ARRIVED') return 'Водитель на месте';
   if (status === 'IN_PROGRESS') return 'В поездке';
   return status;
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 const styles = StyleSheet.create({

@@ -72,6 +72,7 @@ Passenger app:
 - Driver search screen.
 - Active trip screen with driver location.
 - Trip completion screen.
+- Passenger ride history screen with route, status, fare and date.
 - Creates rides through `POST /orders`.
 - Joins `order:{id}` over Socket.IO after ride creation.
 - Reacts to `DRIVER_ACCEPTED`, `DRIVER_LOCATION`, `TRIP_STARTED` and `TRIP_COMPLETED`.
@@ -84,6 +85,7 @@ Driver app:
 - Incoming order offer screen.
 - Arrived/start/complete controls.
 - Balance and trip summary.
+- Driver ride history screen with fare, date and payment status.
 - Sends status through `PATCH /drivers/:driverId/status`.
 - Sends location through `PATCH /drivers/:driverId/location` every few seconds while active.
 - Receives `NEW_ORDER` over Socket.IO.
@@ -118,6 +120,7 @@ Scope:
 - Document review.
 - Tariff configuration.
 - Analytics: trips, revenue, active drivers, conversion.
+- Ride details page with passenger, driver, route, fare and status history.
 
 Done when:
 
@@ -127,6 +130,7 @@ Done when:
 - Loading and error states are visible when backend calls are pending or fail.
 - Mock data is used only as a development fallback and is disabled in production builds.
 - Operations metrics are visible.
+- Admin can open a ride details page from the active orders table.
 
 ## Stage 6 - Payment
 
@@ -185,6 +189,9 @@ Already started:
 - Passenger and driver Expo app prototypes.
 - Admin panel prototype.
 - Admin panel connected to backend API for drivers, active orders, tariffs and basic analytics with development-only mock fallback.
+- Ride history endpoints for passenger and driver with `active`, `completed` and `cancelled` filters.
+- Passenger and driver apps show ride history.
+- Admin can open ride details with passenger, driver, route, fare and status history.
 - Docker and CI/CD baseline.
 - Health, metrics and request logging.
 - Backend hardening for Stage 1 and Stage 3:

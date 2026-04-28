@@ -33,4 +33,5 @@ export interface RideHistoryItem extends Omit<ActiveTrip, 'status'> {
   status: TripStatus | 'CANCELLED';
   createdAt?: string;
   passengerName?: string;
+  paymentStatus?: string;
 }

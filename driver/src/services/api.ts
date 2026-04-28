@@ -288,6 +288,9 @@ interface BackendRide {
     name?: string;
     phone?: string;
   };
+  payment?: {
+    status?: string;
+  };
 }
 
 function mapBackendRideToHistoryItem(ride: BackendRide): RideHistoryItem {
@@ -309,6 +312,7 @@ function mapBackendRideToHistoryItem(ride: BackendRide): RideHistoryItem {
     status: normalizeTripStatus(ride.status),
     createdAt: ride.createdAt,
     passengerName: ride.customer?.name ?? ride.customer?.phone,
+    paymentStatus: ride.payment?.status,
   };
 }
 
