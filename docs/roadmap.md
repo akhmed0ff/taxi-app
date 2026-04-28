@@ -133,6 +133,27 @@ Done when:
 - Operations metrics are visible.
 - Admin can open a ride details page from the active orders table.
 
+## Stage 5.5 - Passenger Web MVP
+
+Goal: allow passengers to order a taxi from a browser.
+
+Scope:
+
+- Next.js + TypeScript web app in `web/`.
+- Auth pages: `/login`, `/register`.
+- Ride creation page: `/order`.
+- Realtime ride page: `/trip/[id]` with Socket.IO JWT auth and `order.join`.
+- Passenger ride history page: `/history`.
+- Manual pickup/dropoff address and coordinate inputs for MVP.
+- Tariff selection: `ECONOMY`, `COMFORT`, `PREMIUM`.
+
+Done when:
+
+- Passenger can register or login in the browser.
+- Passenger can create a ride through `POST /orders`.
+- Ride page listens to `DRIVER_ACCEPTED`, `DRIVER_LOCATION`, `TRIP_STARTED`, `TRIP_COMPLETED` and `RIDE_CANCELLED`.
+- Passenger can open ride history from `GET /orders/history/passenger`.
+
 ## Stage 6 - Payment
 
 Goal: make completed trips financially correct.
@@ -192,6 +213,7 @@ Already started:
 - Admin panel connected to backend API for drivers, active orders, tariffs and basic analytics with Socket.IO live refresh.
 - Ride history endpoints for passenger and driver with `active`, `completed` and `cancelled` filters.
 - Passenger and driver apps show ride history.
+- Passenger web MVP exists in `web/` with auth, order creation, realtime trip tracking and history.
 - Admin can open ride details with passenger, driver, route, fare and status history.
 - Docker and CI/CD baseline.
 - Health, metrics and request logging.
