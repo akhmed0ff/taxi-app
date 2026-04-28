@@ -4,6 +4,7 @@ import { UserRoleValue } from '../../common/roles';
 import { DriverStatusValue } from '../driver/driver-status';
 import { PaymentMethodValue } from '../payment/payment-method';
 import { PaymentStatusValue } from '../payment/payment-status';
+import { RealtimeEvent } from '../../common/realtime-events';
 import { OrderService } from './order.service';
 import { OrderStatusValue } from './order-status';
 
@@ -366,9 +367,21 @@ async function testLifecycleCreatesPendingPayment() {
 
   const arrivedRide = await service.markDriverArrived(createdRide.id, driverUser);
   assert.equal(arrivedRide.status, OrderStatusValue.DRIVER_ARRIVED);
+  assert.ok(
+    state.emittedEvents.some(
+      (event) =>
+        event.room === createdRide.id && event.event === RealtimeEvent.DRIVER_ARRIVED,
+    ),
+  );
 
   const startedRide = await service.startTrip(createdRide.id, driverUser);
   assert.equal(startedRide.status, OrderStatusValue.IN_PROGRESS);
+  assert.ok(
+    state.emittedEvents.some(
+      (event) =>
+        event.room === createdRide.id && event.event === RealtimeEvent.TRIP_STARTED,
+    ),
+  );
 
   const completed = await service.completeTrip(
     createdRide.id,

@@ -58,6 +58,7 @@ export class RealtimeClient {
     };
 
     this.socket.on('DRIVER_ACCEPTED', handleRideEvent);
+    this.socket.on('DRIVER_ARRIVED', handleRideEvent);
     this.socket.on('DRIVER_LOCATION', handleLocation);
     this.socket.on('TRIP_STARTED', handleRideEvent);
     this.socket.on('TRIP_COMPLETED', handleRideEvent);
@@ -67,6 +68,7 @@ export class RealtimeClient {
 
     return () => {
       this.socket?.off('DRIVER_ACCEPTED', handleRideEvent);
+      this.socket?.off('DRIVER_ARRIVED', handleRideEvent);
       this.socket?.off('DRIVER_LOCATION', handleLocation);
       this.socket?.off('TRIP_STARTED', handleRideEvent);
       this.socket?.off('TRIP_COMPLETED', handleRideEvent);

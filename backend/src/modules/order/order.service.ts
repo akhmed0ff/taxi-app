@@ -253,7 +253,8 @@ export class OrderService {
     await this.assertRideDriverAccess(rideId, user);
     const ride = await this.transitionRide(rideId, OrderStatusValue.DRIVER_ARRIVED);
 
-    this.socket.emitToOrder(ride.id, RealtimeEvent.DRIVER_ACCEPTED, ride);
+    this.socket.emitToOrder(ride.id, RealtimeEvent.DRIVER_ARRIVED, ride);
+    this.socket.emitToPassenger(ride.customerId, RealtimeEvent.DRIVER_ARRIVED, ride);
     return ride;
   }
 
