@@ -12,7 +12,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-taxi_app}
       POSTGRES_USER: ${POSTGRES_USER:-taxi}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taxi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
       - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -47,12 +47,14 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-taxi}:${POSTGRES_PASSWORD:-taxi}@postgres:5432/${POSTGRES_DB:-taxi_app}?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-taxi}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-taxi_app}?schema=public
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
       REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-30}
+      NEXT_PUBLIC_ADMIN_PASSWORD: ${NEXT_PUBLIC_ADMIN_PASSWORD:?NEXT_PUBLIC_ADMIN_PASSWORD is required}
     ports:
       - "${BACKEND_BIND:-127.0.0.1}:${BACKEND_PORT:-3000}:3000"
     healthcheck:
@@ -79,7 +81,10 @@ services:
     logging: *service-logging
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-taxi}:${POSTGRES_PASSWORD:-taxi}@postgres:5432/${POSTGRES_DB:-taxi_app}?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-taxi}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-taxi_app}?schema=public
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      NEXT_PUBLIC_ADMIN_PASSWORD: ${NEXT_PUBLIC_ADMIN_PASSWORD:?NEXT_PUBLIC_ADMIN_PASSWORD is required}
     command: ["npx", "prisma", "migrate", "deploy"]
     depends_on:
       postgres:
@@ -92,14 +97,14 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL is required}
         NEXT_PUBLIC_ADMIN_PHONE: ${NEXT_PUBLIC_ADMIN_PHONE:-+998900000001}
-        NEXT_PUBLIC_ADMIN_PASSWORD: ${NEXT_PUBLIC_ADMIN_PASSWORD:-password123}
+        NEXT_PUBLIC_ADMIN_PASSWORD: ${NEXT_PUBLIC_ADMIN_PASSWORD:?NEXT_PUBLIC_ADMIN_PASSWORD is required}
     restart: unless-stopped
     logging: *service-logging
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL is required}
       NEXT_PUBLIC_ADMIN_PHONE: ${NEXT_PUBLIC_ADMIN_PHONE:-+998900000001}
-      NEXT_PUBLIC_ADMIN_PASSWORD: ${NEXT_PUBLIC_ADMIN_PASSWORD:-password123}
+      NEXT_PUBLIC_ADMIN_PASSWORD: ${NEXT_PUBLIC_ADMIN_PASSWORD:?NEXT_PUBLIC_ADMIN_PASSWORD is required}
       PORT: 3000
     ports:
       - "${ADMIN_BIND:-127.0.0.1}:${ADMIN_PORT:-3001}:3000"

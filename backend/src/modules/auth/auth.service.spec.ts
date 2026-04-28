@@ -37,8 +37,11 @@ function createAuthMock() {
 
   const prisma = {
     user: {
-      findUnique: async ({ where }: { where: { phone?: string; id?: string } }) =>
-        findUser(state.users, where),
+      findUnique: async ({
+        where,
+      }: {
+        where: { phone?: string; id?: string };
+      }) => findUser(state.users, where),
       create: async ({ data }: { data: Omit<UserState, 'id'> }) => {
         userCounter += 1;
         const user = { id: `user-${userCounter}`, ...data };
@@ -163,7 +166,10 @@ function createAuthMock() {
         let count = 0;
 
         for (const [id, token] of state.refreshTokens) {
-          if (token.tokenHash === where.tokenHash && token.revoked === where.revoked) {
+          if (
+            token.tokenHash === where.tokenHash &&
+            token.revoked === where.revoked
+          ) {
             state.refreshTokens.set(id, { ...token, ...data });
             count += 1;
           }
@@ -174,7 +180,11 @@ function createAuthMock() {
     },
   };
   const jwt = {
-    signAsync: async (payload: { sub: string; userId: string; role: string }) => {
+    signAsync: async (payload: {
+      sub: string;
+      userId: string;
+      role: string;
+    }) => {
       state.signedTokens.push(payload);
       return `access-${state.signedTokens.length}`;
     },
@@ -200,7 +210,10 @@ async function testRegisterLoginRefreshLogout() {
   assert.ok(storedUser?.passwordHash);
   assert.notEqual(storedUser.passwordHash, 'password123');
   assert.ok(storedUser.passwordHash.startsWith('$2'));
-  assert.equal(await bcrypt.compare('password123', storedUser.passwordHash), true);
+  assert.equal(
+    await bcrypt.compare('password123', storedUser.passwordHash),
+    true,
+  );
   assert.equal('passwordHash' in registered.user, false);
   assert.ok(registered.accessToken);
   assert.ok(registered.refreshToken);
@@ -245,7 +258,10 @@ async function testRegisterLoginRefreshLogout() {
     refreshToken: refreshed.refreshToken,
   });
   assert.deepEqual(logout, { ok: true });
-  assert.equal([...state.refreshTokens.values()].filter((token) => token.revoked).length, 2);
+  assert.equal(
+    [...state.refreshTokens.values()].filter((token) => token.revoked).length,
+    2,
+  );
 }
 
 async function testExpiredRefreshTokenFails() {
@@ -282,7 +298,10 @@ async function testLogoutRevokesRefreshToken() {
     refreshToken: registered.refreshToken,
   });
   assert.deepEqual(logout, { ok: true });
-  assert.equal([...state.refreshTokens.values()].filter((token) => token.revoked).length, 1);
+  assert.equal(
+    [...state.refreshTokens.values()].filter((token) => token.revoked).length,
+    1,
+  );
 
   await assert.rejects(
     () => service.refresh({ refreshToken: registered.refreshToken }),
@@ -301,10 +320,7 @@ async function testRegisterRejectsDuplicatePhone() {
 
   await service.register(input);
 
-  await assert.rejects(
-    () => service.register(input),
-    ConflictException,
-  );
+  await assert.rejects(() => service.register(input), ConflictException);
 }
 
 async function testDevLoginDisabledInProduction() {
@@ -330,7 +346,9 @@ async function testDevLoginDisabledInProduction() {
 async function testDevLoginWorksOutsideProduction() {
   const { service } = createAuthMock();
   const previousNodeEnv = process.env.NODE_ENV;
+  const previousEnableDevLogin = process.env.ENABLE_DEV_LOGIN;
   process.env.NODE_ENV = 'development';
+  process.env.ENABLE_DEV_LOGIN = 'true';
 
   try {
     const result = await service.devLogin({
@@ -345,6 +363,30 @@ async function testDevLoginWorksOutsideProduction() {
     assert.ok(result.refreshToken);
   } finally {
     process.env.NODE_ENV = previousNodeEnv;
+    process.env.ENABLE_DEV_LOGIN = previousEnableDevLogin;
+  }
+}
+
+async function testDevLoginRequiresExplicitFlagOutsideProduction() {
+  const { service } = createAuthMock();
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousEnableDevLogin = process.env.ENABLE_DEV_LOGIN;
+  process.env.NODE_ENV = 'development';
+  delete process.env.ENABLE_DEV_LOGIN;
+
+  try {
+    await assert.rejects(
+      () =>
+        service.devLogin({
+          phone: '+998900007777',
+          name: 'Dev',
+          role: UserRoleValue.PASSENGER,
+        }),
+      ForbiddenException,
+    );
+  } finally {
+    process.env.NODE_ENV = previousNodeEnv;
+    process.env.ENABLE_DEV_LOGIN = previousEnableDevLogin;
   }
 }
 
@@ -366,14 +408,20 @@ async function main() {
   await testLogoutRevokesRefreshToken();
   await testRegisterRejectsDuplicatePhone();
   await testDevLoginWorksOutsideProduction();
+  await testDevLoginRequiresExplicitFlagOutsideProduction();
   await testDevLoginDisabledInProduction();
   await testRegisterCreatesDriverProfile();
 }
 
-function findUser(users: Map<string, UserState>, where: { phone?: string; id?: string }) {
-  return [...users.values()].find(
-    (user) => user.phone === where.phone || user.id === where.id,
-  ) ?? null;
+function findUser(
+  users: Map<string, UserState>,
+  where: { phone?: string; id?: string },
+) {
+  return (
+    [...users.values()].find(
+      (user) => user.phone === where.phone || user.id === where.id,
+    ) ?? null
+  );
 }
 
 void main();

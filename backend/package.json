@@ -12,6 +12,7 @@
     "redis:down": "docker compose -f ../docker-compose.yml down",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "npm run test:core-flow",
+    "test:env": "ts-node src/infrastructure/config/env.validation.spec.ts",
     "test:auth": "ts-node src/modules/auth/auth.service.spec.ts",
     "test:pricing": "ts-node src/modules/pricing/pricing.service.spec.ts",
     "test:concurrent-accept": "ts-node src/modules/order/order.service.concurrent.spec.ts",
@@ -19,7 +20,7 @@
     "test:order-history": "ts-node src/modules/order/order.service.history.spec.ts",
     "test:matching": "ts-node src/modules/matching/matching.service.spec.ts",
     "test:socket": "ts-node src/infrastructure/socket/socket.gateway.spec.ts",
-    "test:core-flow": "npm run test:auth && npm run test:pricing && npm run test:concurrent-accept && npm run test:order-lifecycle && npm run test:order-history && npm run test:matching && npm run test:socket",
+    "test:core-flow": "npm run test:env && npm run test:auth && npm run test:pricing && npm run test:concurrent-accept && npm run test:order-lifecycle && npm run test:order-history && npm run test:matching && npm run test:socket",
     "format": "prettier --write \"src/**/*.ts\" \"prisma/**/*.prisma\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
@@ -33,6 +34,7 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/platform-express": "^11.1.6",
     "@nestjs/platform-socket.io": "^11.1.6",
+    "@nestjs/swagger": "^11.4.2",
     "@nestjs/websockets": "^11.1.6",
     "@prisma/client": "^6.18.0",
     "@types/bcrypt": "^6.0.0",
@@ -44,7 +46,8 @@
     "prisma": "^6.18.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",

@@ -24,7 +24,7 @@ docs/      архитектура, деплой и roadmap
 ## Текущее состояние
 
 - Auth endpoints: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`
-- Development-only auth shortcut: `POST /auth/dev-login` работает только при `NODE_ENV != production`
+- Development-only auth shortcut: `POST /auth/dev-login` работает только при `NODE_ENV != production` и `ENABLE_DEV_LOGIN=true`
 - JWT AuthGuard и RoleGuard для HTTP endpoints
 - Cancel ride flow: passenger/driver before `IN_PROGRESS`, admin before final states, `cancelReason`, driver returns `ONLINE`, realtime `RIDE_CANCELLED`.
 - Жизненный цикл заказа: создать, принять, приехать, начать, завершить, оплатить
@@ -145,7 +145,7 @@ Admin backend API:
 
 - `NEXT_PUBLIC_API_URL` points the admin panel to the backend. Production builds require a real public API URL and reject localhost.
 - `NEXT_PUBLIC_ADMIN_PHONE` and `NEXT_PUBLIC_ADMIN_PASSWORD` are used for admin login.
-- If admin login fails in development, the panel may use `/auth/dev-login`.
+- If admin login fails in development, the panel may use `/auth/dev-login` only when `ENABLE_DEV_LOGIN=true`.
 - Mock data has been removed from the admin panel; drivers, active orders, tariffs and basic analytics must come from the backend API.
 - Admin Socket.IO connects with `auth: { accessToken }` and receives `ORDER_UPDATED` / `DRIVER_UPDATED` events for live dashboard refresh.
 
@@ -172,11 +172,19 @@ Docker:
 docker compose up -d --build
 ```
 
+Production env hardening:
+
+- `.env.example` is only for local development and must not be copied to production.
+- `.env.production.example` contains placeholders only; replace all secrets on the VPS.
+- In production, backend startup requires `JWT_SECRET` with at least 32 characters and rejects weak Postgres/admin passwords.
+- Swagger/OpenAPI is available at `/docs` only outside production.
+
 ## Документация
 
 - Архитектура: [docs/architecture.md](docs/architecture.md)
 - Roadmap: [docs/roadmap.md](docs/roadmap.md)
 - Auth: [docs/auth.md](docs/auth.md)
+- Security: [docs/security.md](docs/security.md)
 - Matching: [docs/matching.md](docs/matching.md)
 - Pricing: [docs/pricing.md](docs/pricing.md)
 - Деплой: [docs/deployment.md](docs/deployment.md)

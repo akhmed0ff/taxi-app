@@ -38,12 +38,21 @@ Before starting production, replace:
 - `JWT_SECRET`
 - `NEXT_PUBLIC_ADMIN_PASSWORD`
 - `NEXT_PUBLIC_API_URL`
+- `ENABLE_DEV_LOGIN`
 - `BACKEND_BIND`
 - `ADMIN_BIND`
 - `PUBLIC_API_URL`
 - `PUBLIC_ADMIN_URL`
 
-`JWT_SECRET` is required in Docker Compose and the backend refuses to start in production when it is missing or set to `change-me`.
+`JWT_SECRET` is required in Docker Compose and the backend refuses to start in production when it is missing, shorter than 32 characters or set to `change-me`.
+
+Production startup validation also rejects weak `POSTGRES_PASSWORD` and `NEXT_PUBLIC_ADMIN_PASSWORD` values such as `taxi`, `password`, `password123` and `change-me`.
+
+Keep dev-login disabled in production:
+
+```env
+ENABLE_DEV_LOGIN=false
+```
 
 `NEXT_PUBLIC_API_URL` is passed to the admin image at build time. In production it must be a real public API URL, for example `https://api.example.com`; the admin image intentionally fails to build with `http://localhost:3000` or `http://127.0.0.1:3000`.
 
@@ -98,6 +107,8 @@ docker compose run --rm migrate
 ```
 
 The backend container starts only the NestJS runtime: `node dist/main`.
+
+Swagger/OpenAPI is available at `/docs` only outside production. Use local development or staging to inspect the API schema and Bearer auth requirements.
 
 ## VPS Setup
 
@@ -323,6 +334,8 @@ Deploy steps:
 ## Production Checklist
 
 - Replace all default secrets in `.env`.
+- Set `ENABLE_DEV_LOGIN=false`.
+- Use `JWT_SECRET` with at least 32 random characters.
 - Set `NEXT_PUBLIC_API_URL=https://api.example.com`.
 - Rebuild admin after env changes.
 - Run `docker compose build backend admin`.

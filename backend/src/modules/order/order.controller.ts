@@ -8,6 +8,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
@@ -21,11 +22,14 @@ import { OrderService } from './order.service';
 
 @Controller('orders')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@ApiTags('orders')
+@ApiBearerAuth()
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
   @Post()
   @Roles(UserRoleValue.PASSENGER, UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'Create a ride order' })
   create(@Body() dto: CreateOrderDto, @CurrentUser() user: AuthUser) {
     return this.orderService.create({
       ...dto,
@@ -36,12 +40,14 @@ export class OrderController {
 
   @Get('active')
   @Roles(UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'List active ride orders' })
   findActive() {
     return this.orderService.findActive();
   }
 
   @Get('history/passenger')
   @Roles(UserRoleValue.PASSENGER)
+  @ApiOperation({ summary: 'Passenger ride history' })
   findPassengerHistory(
     @CurrentUser() user: AuthUser,
     @Query('filter') filter?: string,
@@ -51,6 +57,7 @@ export class OrderController {
 
   @Get('history/driver')
   @Roles(UserRoleValue.DRIVER)
+  @ApiOperation({ summary: 'Driver ride history' })
   findDriverHistory(
     @CurrentUser() user: AuthUser,
     @Query('filter') filter?: string,
@@ -60,12 +67,14 @@ export class OrderController {
 
   @Get(':rideId')
   @Roles(UserRoleValue.PASSENGER, UserRoleValue.DRIVER, UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'Get ride order details' })
   findOne(@Param('rideId') rideId: string) {
     return this.orderService.findOne(rideId);
   }
 
   @Patch(':rideId/accept/:driverId')
   @Roles(UserRoleValue.DRIVER, UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'Accept a ride as driver' })
   accept(
     @Param('rideId') rideId: string,
     @Param('driverId') driverId: string,
@@ -76,18 +85,21 @@ export class OrderController {
 
   @Patch(':rideId/arrive')
   @Roles(UserRoleValue.DRIVER, UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'Mark driver arrived' })
   arrive(@Param('rideId') rideId: string, @CurrentUser() user: AuthUser) {
     return this.orderService.markDriverArrived(rideId, user);
   }
 
   @Patch(':rideId/start')
   @Roles(UserRoleValue.DRIVER, UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'Start a ride' })
   start(@Param('rideId') rideId: string, @CurrentUser() user: AuthUser) {
     return this.orderService.startTrip(rideId, user);
   }
 
   @Patch(':rideId/cancel')
   @Roles(UserRoleValue.PASSENGER, UserRoleValue.DRIVER, UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'Cancel a ride before completion' })
   cancel(
     @Param('rideId') rideId: string,
     @Body() dto: CancelOrderDto,
@@ -98,6 +110,7 @@ export class OrderController {
 
   @Patch(':rideId/complete')
   @Roles(UserRoleValue.DRIVER, UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'Complete a ride' })
   complete(
     @Param('rideId') rideId: string,
     @Body() dto: CompleteOrderDto,
@@ -116,6 +129,7 @@ export class OrderController {
 
   @Patch(':rideId/pay')
   @Roles(UserRoleValue.PASSENGER, UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'Mark ride payment as paid' })
   pay(@Param('rideId') rideId: string, @CurrentUser() user: AuthUser) {
     return this.orderService.pay(rideId, user);
   }

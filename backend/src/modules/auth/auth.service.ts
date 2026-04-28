@@ -5,6 +5,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Buffer } from 'node:buffer';
 import { promisify } from 'node:util';
 import { randomBytes, createHash, pbkdf2, timingSafeEqual } from 'node:crypto';
@@ -24,6 +25,7 @@ export class AuthService {
   constructor(
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
+    private readonly config?: ConfigService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -45,7 +47,10 @@ export class AuthService {
         role,
       },
     });
-    const driver = await this.ensureDriverProfile(user.id, user.role as UserRole);
+    const driver = await this.ensureDriverProfile(
+      user.id,
+      user.role as UserRole,
+    );
     const tokens = await this.issueTokens({
       id: user.id,
       role: user.role as UserRole,
@@ -76,7 +81,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid phone or password');
     }
 
-    const driver = await this.ensureDriverProfile(user.id, user.role as UserRole);
+    const driver = await this.ensureDriverProfile(
+      user.id,
+      user.role as UserRole,
+    );
     const tokens = await this.issueTokens({
       id: user.id,
       role: user.role as UserRole,
@@ -161,8 +169,15 @@ export class AuthService {
 
   async devLogin(dto: DevLoginDto) {
     // dev-login is intended only for local development and test builds.
-    if (process.env.NODE_ENV === 'production') {
-      throw new ForbiddenException('dev-login is disabled in production');
+    const isProduction =
+      this.config?.get<string>('NODE_ENV') === 'production' ||
+      process.env.NODE_ENV === 'production';
+    const devLoginEnabled =
+      this.config?.get<string>('ENABLE_DEV_LOGIN') === 'true' ||
+      process.env.ENABLE_DEV_LOGIN === 'true';
+
+    if (isProduction || !devLoginEnabled) {
+      throw new ForbiddenException('dev-login is disabled');
     }
 
     const user = await this.prisma.user.upsert({
@@ -177,7 +192,10 @@ export class AuthService {
         role: dto.role,
       },
     });
-    const driver = await this.ensureDriverProfile(user.id, user.role as UserRole);
+    const driver = await this.ensureDriverProfile(
+      user.id,
+      user.role as UserRole,
+    );
     const tokens = await this.issueTokens({
       id: user.id,
       role: user.role as UserRole,
@@ -232,7 +250,10 @@ export class AuthService {
     );
 
     const storedKey = Buffer.from(key, 'hex');
-    return derivedKey.length === storedKey.length && timingSafeEqual(derivedKey, storedKey);
+    return (
+      derivedKey.length === storedKey.length &&
+      timingSafeEqual(derivedKey, storedKey)
+    );
   }
 
   private toPublicUser<T extends { passwordHash?: string | null }>(user: T) {

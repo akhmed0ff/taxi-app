@@ -13,7 +13,7 @@ Production-ready endpoints:
 | `POST /auth/refresh` | Rotate a valid refresh token and issue a new access/refresh pair |
 | `POST /auth/logout` | Revoke a refresh token |
 
-`POST /auth/dev-login` exists only for local development and test builds. It keeps the old shortcut behavior when `NODE_ENV !== production`, but returns `403 Forbidden` when `NODE_ENV=production`.
+`POST /auth/dev-login` exists only for local development and test builds. It works only when `NODE_ENV !== production` and `ENABLE_DEV_LOGIN=true`; otherwise it returns `403 Forbidden`.
 
 ## Register/Login
 
@@ -47,6 +47,7 @@ Passwords are stored as bcrypt hashes. Refresh tokens are stored hashed in the d
 Local shortcut:
 
 ```bash
+ENABLE_DEV_LOGIN=true
 curl -X POST http://localhost:3000/auth/dev-login \
   -H "Content-Type: application/json" \
   -d '{"phone":"+998901112233","name":"Local Driver","role":"DRIVER"}'
@@ -58,6 +59,8 @@ Production behavior:
 NODE_ENV=production
 # POST /auth/dev-login -> 403 Forbidden
 ```
+
+If `ENABLE_DEV_LOGIN` is not set to `true`, `/auth/dev-login` also returns `403 Forbidden` in local development.
 
 Use `/auth/register` and `/auth/login` for production users.
 

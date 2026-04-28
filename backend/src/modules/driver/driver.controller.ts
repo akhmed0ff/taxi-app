@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
@@ -11,23 +12,28 @@ import { DriverService } from './driver.service';
 
 @Controller('drivers')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@ApiTags('drivers')
+@ApiBearerAuth()
 export class DriverController {
   constructor(private readonly driverService: DriverService) {}
 
   @Get()
   @Roles(UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'List drivers' })
   findAll() {
     return this.driverService.findAll();
   }
 
   @Get('online')
   @Roles(UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'List online drivers' })
   findOnline() {
     return this.driverService.findOnline();
   }
 
   @Patch(':driverId/status')
   @Roles(UserRoleValue.DRIVER, UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'Update driver status' })
   updateStatus(
     @Param('driverId') driverId: string,
     @Body('status') status: DriverStatus,
@@ -38,6 +44,7 @@ export class DriverController {
 
   @Patch(':driverId/location')
   @Roles(UserRoleValue.DRIVER, UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'Update driver foreground location' })
   updateLocation(
     @Param('driverId') driverId: string,
     @Body() dto: UpdateDriverLocationDto,
