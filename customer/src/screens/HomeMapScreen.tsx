@@ -7,9 +7,14 @@ import { Point } from '../types/order';
 interface HomeMapScreenProps {
   onRouteSelected: (pickup: Point, dropoff: Point) => void;
   onOpenHistory: () => void;
+  onLogout: () => void;
 }
 
-export function HomeMapScreen({ onOpenHistory, onRouteSelected }: HomeMapScreenProps) {
+export function HomeMapScreen({
+  onLogout,
+  onOpenHistory,
+  onRouteSelected,
+}: HomeMapScreenProps) {
   const [pickupAddress, setPickupAddress] = useState<string>(t('currentLocation'));
   const [dropoffAddress, setDropoffAddress] = useState('');
   const [currentPoint, setCurrentPoint] = useState<Point>({
@@ -37,9 +42,14 @@ export function HomeMapScreen({ onOpenHistory, onRouteSelected }: HomeMapScreenP
         <Text style={styles.mapMeta}>{currentPoint.lat.toFixed(4)}, {currentPoint.lng.toFixed(4)}</Text>
       </View>
       <View style={styles.panel}>
-        <Pressable onPress={onOpenHistory} style={styles.secondaryButton}>
-          <Text style={styles.secondaryButtonText}>История поездок</Text>
-        </Pressable>
+        <View style={styles.quickActions}>
+          <Pressable onPress={onOpenHistory} style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>История поездок</Text>
+          </Pressable>
+          <Pressable onPress={onLogout} style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>Выйти</Text>
+          </Pressable>
+        </View>
         <Text style={styles.label}>{t('from')}</Text>
         <TextInput onChangeText={setPickupAddress} style={styles.input} value={pickupAddress} />
         <Text style={styles.label}>{t('to')}</Text>
@@ -65,7 +75,8 @@ const styles = StyleSheet.create({
   mapTitle: { fontSize: 32, fontWeight: '800', color: '#0f172a' },
   mapMeta: { marginTop: 8, color: '#334155' },
   panel: { padding: 16, backgroundColor: '#ffffff' },
-  secondaryButton: { height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, backgroundColor: '#ffffff' },
+  quickActions: { flexDirection: 'row', gap: 10 },
+  secondaryButton: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, backgroundColor: '#ffffff' },
   secondaryButtonText: { fontWeight: '800', color: '#111827' },
   label: { marginTop: 10, marginBottom: 6, fontWeight: '700', color: '#334155' },
   input: { height: 48, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 12 },

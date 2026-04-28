@@ -6,9 +6,15 @@ interface OnlineScreenProps {
   status: DriverStatus;
   onToggleOnline: () => void;
   onOpenHistory: () => void;
+  onLogout: () => void;
 }
 
-export function OnlineScreen({ onOpenHistory, status, onToggleOnline }: OnlineScreenProps) {
+export function OnlineScreen({
+  onLogout,
+  onOpenHistory,
+  status,
+  onToggleOnline,
+}: OnlineScreenProps) {
   const isOnline = status === 'ONLINE' || status === 'BUSY';
 
   return (
@@ -20,6 +26,9 @@ export function OnlineScreen({ onOpenHistory, status, onToggleOnline }: OnlineSc
       </Pressable>
       <Pressable onPress={onOpenHistory} style={styles.secondaryButton}>
         <Text style={styles.secondaryButtonText}>История заказов</Text>
+      </Pressable>
+      <Pressable onPress={onLogout} style={styles.secondaryButton}>
+        <Text style={styles.secondaryButtonText}>Выйти</Text>
       </Pressable>
       <View style={styles.info}>
         <Text style={styles.infoTitle}>{t('geotracking')}</Text>

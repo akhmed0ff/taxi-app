@@ -15,6 +15,14 @@ export interface CustomerSession {
   customerId: string;
 }
 
+interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  user: {
+    id: string;
+  };
+}
+
 export interface CreateOrderInput {
   accessToken: string;
   customerId: string;
@@ -44,11 +52,16 @@ interface BackendRide {
 
 export async function loginPassenger(phone: string): Promise<CustomerSession> {
   const password = process.env.EXPO_PUBLIC_CUSTOMER_PASSWORD ?? 'password123';
-  const data = await registerOrLogin({
+  const data = await registerPassenger({
     phone,
     password,
     name: 'Passenger',
-    role: 'PASSENGER',
+  }).catch((error) => {
+    if (!isConflictError(error)) {
+      throw error;
+    }
+
+    return loginPassengerWithPassword({ phone, password });
   });
 
   return {
@@ -58,16 +71,18 @@ export async function loginPassenger(phone: string): Promise<CustomerSession> {
   };
 }
 
-async function registerOrLogin(input: {
+export async function registerPassenger(input: {
   phone: string;
   password: string;
   name: string;
-  role: 'PASSENGER';
-}) {
+}): Promise<AuthResponse> {
   const registerResponse = await fetch(`${API_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      role: 'PASSENGER',
+    }),
   });
 
   if (registerResponse.ok) {
@@ -78,13 +93,17 @@ async function registerOrLogin(input: {
     throw new Error(await readError(registerResponse, 'Failed to register passenger'));
   }
 
+  throw new Error('PHONE_ALREADY_REGISTERED');
+}
+
+export async function loginPassengerWithPassword(input: {
+  phone: string;
+  password: string;
+}): Promise<AuthResponse> {
   const loginResponse = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      phone: input.phone,
-      password: input.password,
-    }),
+    body: JSON.stringify(input),
   });
 
   if (!loginResponse.ok) {
@@ -92,6 +111,41 @@ async function registerOrLogin(input: {
   }
 
   return loginResponse.json();
+}
+
+export async function refreshPassengerSession(
+  refreshToken: string,
+): Promise<CustomerSession> {
+  const response = await fetch(`${API_URL}/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to refresh passenger session'));
+  }
+
+  const data = (await response.json()) as AuthResponse;
+  return {
+    accessToken: data.accessToken,
+    refreshToken: data.refreshToken,
+    customerId: data.user.id,
+  };
+}
+
+export async function logoutPassenger(refreshToken: string) {
+  const response = await fetch(`${API_URL}/auth/logout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to logout passenger'));
+  }
+
+  return response.json();
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
@@ -199,4 +253,8 @@ function mapRideToHistoryItem(ride: BackendRide): RideHistoryItem {
 async function readError(response: Response, fallback: string) {
   const body = await response.text();
   return body ? `${fallback}: ${body}` : fallback;
+}
+
+function isConflictError(error: unknown) {
+  return error instanceof Error && error.message === 'PHONE_ALREADY_REGISTERED';
 }

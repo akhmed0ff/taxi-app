@@ -7,13 +7,16 @@ import {
   completeTrip,
   DriverSession,
   loginDriver,
+  logoutDriver,
   markArrived,
+  refreshDriverSession,
   startTrip,
   updateDriverStatus,
 } from './src/services/api';
 import { driverRealtimeClient } from './src/services/realtime';
 import { useDriverLocationTracking } from './src/hooks/useDriverLocationTracking';
 import { BalanceScreen } from './src/screens/BalanceScreen';
+import { AuthScreen } from './src/screens/AuthScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { NavigationScreen } from './src/screens/NavigationScreen';
 import { OnlineScreen } from './src/screens/OnlineScreen';
@@ -21,10 +24,10 @@ import { OrderOfferScreen } from './src/screens/OrderOfferScreen';
 import { TripScreen } from './src/screens/TripScreen';
 import { ActiveTrip, DriverStatus, OrderOffer } from './src/types/order';
 
-type Screen = 'online' | 'offer' | 'navigation' | 'trip' | 'balance' | 'history';
+type Screen = 'auth' | 'online' | 'offer' | 'navigation' | 'trip' | 'balance' | 'history';
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('online');
+  const [screen, setScreen] = useState<Screen>('auth');
   const [session, setSession] = useState<DriverSession>();
   const [status, setStatus] = useState<DriverStatus>('OFFLINE');
   const [offer, setOffer] = useState<OrderOffer>();
@@ -38,41 +41,65 @@ export default function App() {
   });
 
   useEffect(() => {
-    let unsubscribe: () => void = () => undefined;
+    if (!session?.accessToken) {
+      return;
+    }
 
-    void loginDriver().then((nextSession) => {
-      setSession(nextSession);
-      driverRealtimeClient.connect(nextSession.accessToken);
-      unsubscribe = driverRealtimeClient.onNewOrder((nextOffer) => {
-        setOffer({
-          ...nextOffer,
-          expiresInSeconds: nextOffer.expiresInSeconds ?? 10,
-        });
-        setScreen('offer');
+    driverRealtimeClient.connect(session.accessToken);
+    const unsubscribeNewOrder = driverRealtimeClient.onNewOrder((nextOffer) => {
+      setOffer({
+        ...nextOffer,
+        expiresInSeconds: nextOffer.expiresInSeconds ?? 10,
       });
-      const unsubscribeCancelled = driverRealtimeClient.onRideCancelled((rideId) => {
-        setTrip((current) => {
-          if (!current || current.id !== rideId) {
-            return current;
-          }
+      setScreen('offer');
+    });
+    const unsubscribeCancelled = driverRealtimeClient.onRideCancelled((rideId) => {
+      setTrip((current) => {
+        if (!current || current.id !== rideId) {
+          return current;
+        }
 
-          setStatus('ONLINE');
-          setScreen('online');
-          return undefined;
-        });
+        setStatus('ONLINE');
+        setScreen('online');
+        return undefined;
       });
-      const unsubscribeNewOrder = unsubscribe;
-      unsubscribe = () => {
-        unsubscribeNewOrder();
-        unsubscribeCancelled();
-      };
     });
 
     return () => {
-      unsubscribe();
+      unsubscribeNewOrder();
+      unsubscribeCancelled();
       driverRealtimeClient.disconnect();
     };
-  }, []);
+  }, [session?.accessToken]);
+
+  useEffect(() => {
+    if (!session?.refreshToken) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      void refreshDriverSession(session.refreshToken)
+        .then(setSession)
+        .catch((error) => {
+          console.warn(error);
+          setSession(undefined);
+          setStatus('OFFLINE');
+          setScreen('auth');
+        });
+    }, 1000 * 60 * 10);
+
+    return () => clearInterval(timer);
+  }, [session?.refreshToken]);
+
+  async function handleAuthenticated(phone: string) {
+    try {
+      const nextSession = await loginDriver(phone);
+      setSession(nextSession);
+      setScreen('online');
+    } catch (error) {
+      console.warn(error);
+    }
+  }
 
   async function toggleOnline() {
     if (!session) {
@@ -124,11 +151,32 @@ export default function App() {
     }
   }
 
+  async function handleLogout() {
+    if (session?.refreshToken) {
+      try {
+        await logoutDriver(session.refreshToken);
+      } catch (error) {
+        console.warn(error);
+      }
+    }
+
+    driverRealtimeClient.disconnect();
+    setSession(undefined);
+    setStatus('OFFLINE');
+    setOffer(undefined);
+    setTrip(undefined);
+    setScreen('auth');
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
+      {screen === 'auth' && (
+        <AuthScreen onAuthenticated={handleAuthenticated} />
+      )}
       {screen === 'online' && (
         <OnlineScreen
+          onLogout={handleLogout}
           onOpenHistory={() => setScreen('history')}
           onToggleOnline={toggleOnline}
           status={status}

@@ -13,15 +13,34 @@ export interface DriverSession {
   driverId: string;
 }
 
-export async function loginDriver(): Promise<DriverSession> {
-  const phone = process.env.EXPO_PUBLIC_DRIVER_PHONE ?? '+998901112233';
+interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  user: {
+    id: string;
+  };
+  driver?: {
+    id: string;
+  };
+}
+
+export async function loginDriver(phone = process.env.EXPO_PUBLIC_DRIVER_PHONE ?? '+998901112233'): Promise<DriverSession> {
   const password = process.env.EXPO_PUBLIC_DRIVER_PASSWORD ?? 'password123';
-  const data = await registerOrLoginDriver({
+  const data = await registerDriver({
     phone,
     password,
     name: 'Driver',
-    role: 'DRIVER',
+  }).catch((error) => {
+    if (!isConflictError(error)) {
+      throw error;
+    }
+
+    return loginDriverWithPassword({ phone, password });
   });
+
+  if (!data.driver?.id) {
+    throw new Error('Driver profile is missing');
+  }
 
   return {
     accessToken: data.accessToken,
@@ -30,16 +49,18 @@ export async function loginDriver(): Promise<DriverSession> {
   };
 }
 
-async function registerOrLoginDriver(input: {
+export async function registerDriver(input: {
   phone: string;
   password: string;
   name: string;
-  role: 'DRIVER';
-}) {
+}): Promise<AuthResponse> {
   const registerResponse = await fetch(`${API_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      role: 'DRIVER',
+    }),
   });
 
   if (registerResponse.ok) {
@@ -50,13 +71,17 @@ async function registerOrLoginDriver(input: {
     throw new Error(await readError(registerResponse, 'Failed to register driver'));
   }
 
+  throw new Error('PHONE_ALREADY_REGISTERED');
+}
+
+export async function loginDriverWithPassword(input: {
+  phone: string;
+  password: string;
+}): Promise<AuthResponse> {
   const loginResponse = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      phone: input.phone,
-      password: input.password,
-    }),
+    body: JSON.stringify(input),
   });
 
   if (!loginResponse.ok) {
@@ -64,6 +89,46 @@ async function registerOrLoginDriver(input: {
   }
 
   return loginResponse.json();
+}
+
+export async function refreshDriverSession(
+  refreshToken: string,
+): Promise<DriverSession> {
+  const response = await fetch(`${API_URL}/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to refresh driver session'));
+  }
+
+  const data = (await response.json()) as AuthResponse;
+
+  if (!data.driver?.id) {
+    throw new Error('Driver profile is missing');
+  }
+
+  return {
+    accessToken: data.accessToken,
+    refreshToken: data.refreshToken,
+    driverId: data.driver.id,
+  };
+}
+
+export async function logoutDriver(refreshToken: string) {
+  const response = await fetch(`${API_URL}/auth/logout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to logout driver'));
+  }
+
+  return response.json();
 }
 
 export async function updateDriverStatus(
@@ -262,4 +327,8 @@ function normalizeTripStatus(status: BackendRide['status']): RideHistoryItem['st
 async function readError(response: Response, fallback: string) {
   const body = await response.text();
   return body ? `${fallback}: ${body}` : fallback;
+}
+
+function isConflictError(error: unknown) {
+  return error instanceof Error && error.message === 'PHONE_ALREADY_REGISTERED';
 }

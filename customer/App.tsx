@@ -13,6 +13,8 @@ import {
   createOrder,
   CustomerSession,
   loginPassenger,
+  logoutPassenger,
+  refreshPassengerSession,
 } from './src/services/api';
 import { realtimeClient } from './src/services/realtime';
 import { Order, Point, TariffClass } from './src/types/order';
@@ -36,6 +38,24 @@ export default function App() {
     realtimeClient.connect(session.accessToken);
     return () => realtimeClient.disconnect();
   }, [session?.accessToken]);
+
+  useEffect(() => {
+    if (!session?.refreshToken) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      void refreshPassengerSession(session.refreshToken)
+        .then(setSession)
+        .catch((error) => {
+          console.warn(error);
+          setSession(undefined);
+          setScreen('auth');
+        });
+    }, 1000 * 60 * 10);
+
+    return () => clearInterval(timer);
+  }, [session?.refreshToken]);
 
   useEffect(() => {
     if (!order?.id) {
@@ -108,6 +128,21 @@ export default function App() {
     }
   }
 
+  async function handleLogout() {
+    if (session?.refreshToken) {
+      try {
+        await logoutPassenger(session.refreshToken);
+      } catch (error) {
+        console.warn(error);
+      }
+    }
+
+    realtimeClient.disconnect();
+    setSession(undefined);
+    setOrder(undefined);
+    setScreen('auth');
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -118,6 +153,7 @@ export default function App() {
       )}
       {screen === 'home' && (
         <HomeMapScreen
+          onLogout={handleLogout}
           onOpenHistory={() => setScreen('history')}
           onRouteSelected={(nextPickup, nextDropoff) => {
             setPickup(nextPickup);
