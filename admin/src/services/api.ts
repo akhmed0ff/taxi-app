@@ -1,6 +1,7 @@
 import type { activeOrders, drivers, tariffs } from '@/data/mock';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+export const ENABLE_ADMIN_MOCK_FALLBACK = process.env.NODE_ENV !== 'production';
 
 type AdminDriver = (typeof drivers)[number];
 type AdminOrder = (typeof activeOrders)[number];
@@ -156,27 +157,6 @@ async function getAdminAccessToken() {
 
   const phone = process.env.NEXT_PUBLIC_ADMIN_PHONE ?? '+998900000001';
   const password = process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? 'password123';
-  const registerResponse = await fetch(`${API_URL}/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      phone,
-      password,
-      name: 'Admin Dispatcher',
-      role: 'ADMIN',
-    }),
-  });
-
-  if (registerResponse.ok) {
-    const data = await registerResponse.json();
-    adminAccessToken = data.accessToken;
-    return adminAccessToken;
-  }
-
-  if (registerResponse.status !== 409) {
-    throw new Error(await readError(registerResponse, 'Admin register failed'));
-  }
-
   const loginResponse = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -186,11 +166,31 @@ async function getAdminAccessToken() {
     }),
   });
 
-  if (!loginResponse.ok) {
+  if (loginResponse.ok) {
+    const data = await loginResponse.json();
+    adminAccessToken = data.accessToken;
+    return adminAccessToken;
+  }
+
+  if (!ENABLE_ADMIN_MOCK_FALLBACK) {
     throw new Error(await readError(loginResponse, 'Admin login failed'));
   }
 
-  const data = await loginResponse.json();
+  const devLoginResponse = await fetch(`${API_URL}/auth/dev-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      phone,
+      name: 'Admin Dispatcher',
+      role: 'ADMIN',
+    }),
+  });
+
+  if (!devLoginResponse.ok) {
+    throw new Error(await readError(devLoginResponse, 'Admin dev-login failed'));
+  }
+
+  const data = await devLoginResponse.json();
   adminAccessToken = data.accessToken;
   return adminAccessToken;
 }

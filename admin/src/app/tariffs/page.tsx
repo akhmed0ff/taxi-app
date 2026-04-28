@@ -6,13 +6,15 @@ import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
 import { formatSom, tariffs as initialTariffs } from '@/data/mock';
-import { fetchTariffs, saveTariff } from '@/services/api';
+import { ENABLE_ADMIN_MOCK_FALLBACK, fetchTariffs, saveTariff } from '@/services/api';
 
 type Tariff = (typeof initialTariffs)[number];
 type NumericTariffField = 'baseFare' | 'perKm' | 'perMinute' | 'surge';
 
 export default function TariffsPage() {
-  const [tariffs, setTariffs] = useState(initialTariffs);
+  const [tariffs, setTariffs] = useState<typeof initialTariffs>(
+    ENABLE_ADMIN_MOCK_FALLBACK ? initialTariffs : [],
+  );
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string>();
   const [error, setError] = useState<string>();
@@ -29,13 +31,21 @@ export default function TariffsPage() {
         const nextTariffs = await fetchTariffs();
 
         if (!cancelled) {
-          setTariffs(nextTariffs.length > 0 ? nextTariffs : initialTariffs);
+          setTariffs(
+            nextTariffs.length > 0 || !ENABLE_ADMIN_MOCK_FALLBACK
+              ? nextTariffs
+              : initialTariffs,
+          );
         }
       } catch (nextError) {
         if (!cancelled) {
           console.warn(nextError);
-          setTariffs(initialTariffs);
-          setError('Backend недоступен. Показаны fallback mock-данные.');
+          setTariffs(ENABLE_ADMIN_MOCK_FALLBACK ? initialTariffs : []);
+          setError(
+            ENABLE_ADMIN_MOCK_FALLBACK
+              ? 'Backend недоступен. Показаны fallback mock-данные.'
+              : 'Backend API unavailable. Mock fallback is disabled in production.',
+          );
         }
       } finally {
         if (!cancelled) {

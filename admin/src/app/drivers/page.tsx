@@ -6,7 +6,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
 import { drivers as initialDrivers, formatSom } from '@/data/mock';
-import { fetchAdminDrivers } from '@/services/api';
+import { ENABLE_ADMIN_MOCK_FALLBACK, fetchAdminDrivers } from '@/services/api';
 
 type Driver = (typeof initialDrivers)[number];
 
@@ -29,7 +29,9 @@ const documentLabels: Record<Driver['documents'], string> = {
 };
 
 export default function DriversPage() {
-  const [drivers, setDrivers] = useState(initialDrivers);
+  const [drivers, setDrivers] = useState<typeof initialDrivers>(
+    ENABLE_ADMIN_MOCK_FALLBACK ? initialDrivers : [],
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
@@ -51,8 +53,12 @@ export default function DriversPage() {
       } catch (nextError) {
         if (!cancelled) {
           console.warn(nextError);
-          setDrivers(initialDrivers);
-          setError('Backend недоступен. Показаны fallback mock-данные.');
+          setDrivers(ENABLE_ADMIN_MOCK_FALLBACK ? initialDrivers : []);
+          setError(
+            ENABLE_ADMIN_MOCK_FALLBACK
+              ? 'Backend недоступен. Показаны fallback mock-данные.'
+              : 'Backend API unavailable. Mock fallback is disabled in production.',
+          );
         }
       } finally {
         if (!cancelled) {

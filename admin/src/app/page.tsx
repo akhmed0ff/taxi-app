@@ -27,14 +27,19 @@ import {
 } from '@/data/mock';
 import {
   AdminRideDetails,
+  ENABLE_ADMIN_MOCK_FALLBACK,
   fetchActiveOrders,
   fetchAdminDrivers,
   fetchRideDetails,
 } from '@/services/api';
 
 export default function MonitoringPage() {
-  const [activeOrders, setActiveOrders] = useState(fallbackActiveOrders);
-  const [drivers, setDrivers] = useState(fallbackDrivers);
+  const [activeOrders, setActiveOrders] = useState<typeof fallbackActiveOrders>(
+    ENABLE_ADMIN_MOCK_FALLBACK ? fallbackActiveOrders : [],
+  );
+  const [drivers, setDrivers] = useState<typeof fallbackDrivers>(
+    ENABLE_ADMIN_MOCK_FALLBACK ? fallbackDrivers : [],
+  );
   const [loading, setLoading] = useState(true);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [rideDetails, setRideDetails] = useState<AdminRideDetails>();
@@ -63,9 +68,13 @@ export default function MonitoringPage() {
       } catch (nextError) {
         if (!cancelled) {
           console.warn(nextError);
-          setActiveOrders(fallbackActiveOrders);
-          setDrivers(fallbackDrivers);
-          setError('Backend недоступен. Показаны fallback mock-данные.');
+          setActiveOrders(ENABLE_ADMIN_MOCK_FALLBACK ? fallbackActiveOrders : []);
+          setDrivers(ENABLE_ADMIN_MOCK_FALLBACK ? fallbackDrivers : []);
+          setError(
+            ENABLE_ADMIN_MOCK_FALLBACK
+              ? 'Backend недоступен. Показаны fallback mock-данные.'
+              : 'Backend API unavailable. Mock fallback is disabled in production.',
+          );
         }
       } finally {
         if (!cancelled) {

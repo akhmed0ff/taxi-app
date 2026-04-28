@@ -89,10 +89,10 @@ Driver app:
 - Receives `NEW_ORDER` over Socket.IO.
 - Calls accept/arrive/start/complete ride endpoints.
 
-Development auth:
+Auth:
 
-- `POST /auth/dev-login` issues JWTs for local mobile flows until production login is implemented.
-- Socket.IO still requires JWT; mobile apps use the dev-login token during local development.
+- Mobile apps use `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh` and `POST /auth/logout`.
+- Socket.IO requires JWT through `handshake.auth.accessToken`.
 
 Localization:
 
@@ -121,8 +121,11 @@ Scope:
 
 Done when:
 
-- Dispatcher can see active orders.
-- Admin can manage drivers and tariffs.
+- Dispatcher can see active orders from `GET /orders/active`.
+- Admin can load drivers from `GET /drivers`.
+- Admin can load and save tariffs through `/admin/tariffs`.
+- Loading and error states are visible when backend calls are pending or fail.
+- Mock data is used only as a development fallback and is disabled in production builds.
 - Operations metrics are visible.
 
 ## Stage 6 - Payment
@@ -181,6 +184,7 @@ Already started:
 - Ride matching queue.
 - Passenger and driver Expo app prototypes.
 - Admin panel prototype.
+- Admin panel connected to backend API for drivers, active orders and tariffs with development-only mock fallback.
 - Docker and CI/CD baseline.
 - Health, metrics and request logging.
 - Backend hardening for Stage 1 and Stage 3:
@@ -192,6 +196,6 @@ Already started:
 
 Next best focus:
 
-1. Continue connecting admin panel screens to real backend endpoints.
-2. Add endpoint-level tests around protected admin/order/driver HTTP routes.
-3. Prepare production auth to replace development-only `POST /auth/dev-login`.
+1. Add endpoint-level tests around protected admin/order/driver HTTP routes.
+2. Replace local admin dev-login fallback with seeded production admin credentials.
+3. Connect admin analytics metrics to backend aggregates.
