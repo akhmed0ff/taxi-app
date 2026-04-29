@@ -1,5 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import { t } from '../i18n';
 import { Order } from '../types/order';
 
@@ -15,14 +16,40 @@ export function TripScreen({ onCancel, order }: TripScreenProps) {
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
-        <View style={styles.routeLine} />
-        <View style={[styles.point, styles.pickupPoint]} />
-        <View style={[styles.point, styles.dropoffPoint]} />
-        <View style={[styles.carMarker, order.status === 'IN_PROGRESS' && styles.carMarkerMoving]}>
-          <Feather color="#ffffff" name="navigation" size={18} />
+        <MapView
+          initialRegion={{
+            latitude: order.driverLocation?.lat ?? order.pickup.lat,
+            longitude: order.driverLocation?.lng ?? order.pickup.lng,
+            latitudeDelta: 0.08,
+            longitudeDelta: 0.08,
+          }}
+          region={{
+            latitude: order.driverLocation?.lat ?? order.pickup.lat,
+            longitude: order.driverLocation?.lng ?? order.pickup.lng,
+            latitudeDelta: 0.08,
+            longitudeDelta: 0.08,
+          }}
+          style={StyleSheet.absoluteFill}
+        >
+          <Marker coordinate={{ latitude: order.pickup.lat, longitude: order.pickup.lng }} pinColor="#0f766e" title={order.pickup.address} />
+          <Marker coordinate={{ latitude: order.dropoff.lat, longitude: order.dropoff.lng }} pinColor="#dc2626" title={order.dropoff.address} />
+          {order.driverLocation ? (
+            <Marker coordinate={{ latitude: order.driverLocation.lat, longitude: order.driverLocation.lng }} pinColor="#111827" title="Водитель" />
+          ) : null}
+          <Polyline
+            coordinates={[
+              { latitude: order.pickup.lat, longitude: order.pickup.lng },
+              { latitude: order.dropoff.lat, longitude: order.dropoff.lng },
+            ]}
+            strokeColor="#14532d"
+            strokeWidth={4}
+          />
+        </MapView>
+        <View style={styles.mapBadge}>
+          <Feather color="#14532d" name="navigation" size={18} />
+          <Text style={styles.mapTitle}>{copy.title}</Text>
+          <Text style={styles.mapMeta}>{copy.subtitle}</Text>
         </View>
-        <Text style={styles.mapTitle}>{copy.title}</Text>
-        <Text style={styles.mapMeta}>{copy.subtitle}</Text>
       </View>
 
       <View style={styles.panel}>
@@ -127,15 +154,16 @@ function getTripCopy(status: Order['status']) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#e2e8f0' },
-  map: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#dcfce7' },
+  map: { flex: 1, backgroundColor: '#dcfce7' },
   routeLine: { position: 'absolute', left: 58, right: 58, top: '48%', height: 4, borderRadius: 4, backgroundColor: '#14532d', transform: [{ rotate: '-8deg' }] },
   point: { position: 'absolute', width: 22, height: 22, borderRadius: 11, borderWidth: 4, borderColor: '#ffffff' },
   pickupPoint: { left: 48, top: '44%', backgroundColor: '#16a34a' },
   dropoffPoint: { right: 48, top: '50%', backgroundColor: '#ef4444' },
   carMarker: { position: 'absolute', left: '42%', top: '43%', width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111827' },
   carMarkerMoving: { left: '58%', top: '47%' },
-  mapTitle: { fontSize: 30, fontWeight: '800', color: '#14532d' },
-  mapMeta: { marginTop: 8, color: '#166534', fontWeight: '700' },
+  mapBadge: { position: 'absolute', left: 16, right: 16, top: 16, padding: 12, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.92)' },
+  mapTitle: { fontSize: 18, fontWeight: '800', color: '#14532d' },
+  mapMeta: { marginTop: 4, color: '#166534', fontWeight: '700' },
   panel: { padding: 18, backgroundColor: '#ffffff' },
   statusPill: { alignSelf: 'flex-start', minHeight: 30, paddingHorizontal: 10, justifyContent: 'center', borderRadius: 8, backgroundColor: '#ecfdf5' },
   statusPillText: { color: '#166534', fontWeight: '900' },

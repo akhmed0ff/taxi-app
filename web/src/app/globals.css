@@ -219,6 +219,30 @@ button:disabled {
   color: #667085;
 }
 
+.mapbox-panel,
+.mapbox-fallback {
+  border: 1px solid #cdd6e3;
+  border-radius: 8px;
+  min-height: 360px;
+  overflow: hidden;
+}
+
+.mapbox-fallback {
+  align-items: center;
+  background:
+    linear-gradient(90deg, rgba(15, 23, 42, 0.06) 1px, transparent 1px),
+    linear-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px),
+    #e8f1ff;
+  background-size: 42px 42px;
+  color: #344054;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+}
+
 @media (max-width: 760px) {
   .app-header {
     align-items: flex-start;

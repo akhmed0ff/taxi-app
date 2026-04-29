@@ -214,6 +214,8 @@ Already started:
 - Ride history endpoints for passenger and driver with `active`, `completed` and `cancelled` filters.
 - Passenger and driver apps show ride history.
 - Passenger web MVP exists in `web/` with auth, order creation, realtime trip tracking and history.
+- Web order page supports Mapbox markers for pickup/dropoff when `NEXT_PUBLIC_MAPBOX_TOKEN` is configured.
+- Customer and driver apps use minimal maps for pickup/dropoff, route context and driver position.
 - Admin can open ride details with passenger, driver, route, fare and status history.
 - Docker and CI/CD baseline.
 - Health, metrics and request logging.

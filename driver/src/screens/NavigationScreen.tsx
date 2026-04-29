@@ -1,22 +1,53 @@
 import { Feather } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import { t } from '../i18n';
-import { ActiveTrip } from '../types/order';
+import { ActiveTrip, Coords } from '../types/order';
 
 interface NavigationScreenProps {
   trip: ActiveTrip;
+  driverPosition?: Coords;
   onArrived: () => void;
   onCancel: () => void;
 }
 
-export function NavigationScreen({ onArrived, onCancel, trip }: NavigationScreenProps) {
+export function NavigationScreen({ driverPosition, onArrived, onCancel, trip }: NavigationScreenProps) {
+  const current = driverPosition ?? trip.pickup;
+
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
-        <View style={styles.routeLine} />
-        <Feather color="#14532d" name="map-pin" size={42} />
-        <Text style={styles.mapTitle}>{t('navigation')}</Text>
-        <Text style={styles.mapMeta}>{trip.pickupAddress}</Text>
+        <MapView
+          initialRegion={{
+            latitude: current.lat,
+            longitude: current.lng,
+            latitudeDelta: 0.08,
+            longitudeDelta: 0.08,
+          }}
+          region={{
+            latitude: current.lat,
+            longitude: current.lng,
+            latitudeDelta: 0.08,
+            longitudeDelta: 0.08,
+          }}
+          style={StyleSheet.absoluteFill}
+        >
+          <Marker coordinate={{ latitude: current.lat, longitude: current.lng }} pinColor="#111827" title="Водитель" />
+          <Marker coordinate={{ latitude: trip.pickup.lat, longitude: trip.pickup.lng }} pinColor="#0f766e" title={trip.pickupAddress} />
+          <Polyline
+            coordinates={[
+              { latitude: current.lat, longitude: current.lng },
+              { latitude: trip.pickup.lat, longitude: trip.pickup.lng },
+            ]}
+            strokeColor="#14532d"
+            strokeWidth={4}
+          />
+        </MapView>
+        <View style={styles.mapBadge}>
+          <Feather color="#14532d" name="map-pin" size={22} />
+          <Text style={styles.mapTitle}>{t('navigation')}</Text>
+          <Text style={styles.mapMeta}>{trip.pickupAddress}</Text>
+        </View>
       </View>
       <View style={styles.panel}>
         <View style={styles.stepPill}>
@@ -51,10 +82,11 @@ export function NavigationScreen({ onArrived, onCancel, trip }: NavigationScreen
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#e2e8f0' },
-  map: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#dcfce7' },
+  map: { flex: 1, backgroundColor: '#dcfce7' },
   routeLine: { position: 'absolute', left: 56, right: 56, top: '50%', height: 4, borderRadius: 4, backgroundColor: '#14532d', transform: [{ rotate: '-10deg' }] },
-  mapTitle: { marginTop: 8, fontSize: 30, fontWeight: '900', color: '#14532d' },
-  mapMeta: { marginTop: 8, paddingHorizontal: 24, textAlign: 'center', color: '#166534', fontWeight: '700' },
+  mapBadge: { position: 'absolute', left: 16, right: 16, top: 16, padding: 12, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.92)' },
+  mapTitle: { marginTop: 4, fontSize: 18, fontWeight: '900', color: '#14532d' },
+  mapMeta: { marginTop: 4, color: '#166534', fontWeight: '700' },
   panel: { padding: 18, backgroundColor: '#ffffff' },
   stepPill: { alignSelf: 'flex-start', minHeight: 30, paddingHorizontal: 10, justifyContent: 'center', borderRadius: 8, backgroundColor: '#ecfdf5' },
   stepPillText: { color: '#166534', fontWeight: '900' },

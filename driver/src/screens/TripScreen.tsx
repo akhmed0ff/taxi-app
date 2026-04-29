@@ -1,22 +1,53 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import { t } from '../i18n';
-import { ActiveTrip } from '../types/order';
+import { ActiveTrip, Coords } from '../types/order';
 
 interface TripScreenProps {
   trip: ActiveTrip;
+  driverPosition?: Coords;
   onStart: () => void;
   onComplete: () => void;
 }
 
-export function TripScreen({ trip, onStart, onComplete }: TripScreenProps) {
+export function TripScreen({ driverPosition, trip, onStart, onComplete }: TripScreenProps) {
   const isInProgress = trip.status === 'IN_PROGRESS';
+  const current = driverPosition ?? (isInProgress ? trip.dropoff : trip.pickup);
 
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
-        <View style={styles.routeLine} />
-        <Text style={styles.mapTitle}>{isInProgress ? t('tripInProgress') : t('passengerNearby')}</Text>
-        <Text style={styles.mapMeta}>{trip.dropoffAddress}</Text>
+        <MapView
+          initialRegion={{
+            latitude: current.lat,
+            longitude: current.lng,
+            latitudeDelta: 0.08,
+            longitudeDelta: 0.08,
+          }}
+          region={{
+            latitude: current.lat,
+            longitude: current.lng,
+            latitudeDelta: 0.08,
+            longitudeDelta: 0.08,
+          }}
+          style={StyleSheet.absoluteFill}
+        >
+          <Marker coordinate={{ latitude: current.lat, longitude: current.lng }} pinColor="#111827" title="Водитель" />
+          <Marker coordinate={{ latitude: trip.pickup.lat, longitude: trip.pickup.lng }} pinColor="#0f766e" title={trip.pickupAddress} />
+          <Marker coordinate={{ latitude: trip.dropoff.lat, longitude: trip.dropoff.lng }} pinColor="#dc2626" title={trip.dropoffAddress} />
+          <Polyline
+            coordinates={[
+              { latitude: trip.pickup.lat, longitude: trip.pickup.lng },
+              { latitude: trip.dropoff.lat, longitude: trip.dropoff.lng },
+            ]}
+            strokeColor="#1d4ed8"
+            strokeWidth={4}
+          />
+        </MapView>
+        <View style={styles.mapBadge}>
+          <Text style={styles.mapTitle}>{isInProgress ? t('tripInProgress') : t('passengerNearby')}</Text>
+          <Text style={styles.mapMeta}>{trip.dropoffAddress}</Text>
+        </View>
       </View>
       <View style={styles.panel}>
         <View style={styles.stepPill}>
@@ -51,10 +82,11 @@ function StatusRow({ active, label }: { active: boolean; label: string }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#e2e8f0' },
-  map: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#dbeafe' },
+  map: { flex: 1, backgroundColor: '#dbeafe' },
   routeLine: { position: 'absolute', left: 56, right: 56, top: '50%', height: 4, borderRadius: 4, backgroundColor: '#1d4ed8', transform: [{ rotate: '8deg' }] },
-  mapTitle: { fontSize: 30, fontWeight: '900', color: '#0f172a' },
-  mapMeta: { marginTop: 8, paddingHorizontal: 24, textAlign: 'center', color: '#334155', fontWeight: '700' },
+  mapBadge: { position: 'absolute', left: 16, right: 16, top: 16, padding: 12, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.92)' },
+  mapTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
+  mapMeta: { marginTop: 4, color: '#334155', fontWeight: '700' },
   panel: { padding: 18, backgroundColor: '#ffffff' },
   stepPill: { alignSelf: 'flex-start', minHeight: 30, paddingHorizontal: 10, justifyContent: 'center', borderRadius: 8, backgroundColor: '#eff6ff' },
   stepPillText: { color: '#1d4ed8', fontWeight: '900' },

@@ -1,6 +1,7 @@
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import { t } from '../i18n';
 import { Point } from '../types/order';
 
@@ -22,6 +23,11 @@ export function HomeMapScreen({
     lng: 70.1436,
     address: t('currentLocation'),
   });
+  const dropoffPoint: Point = {
+    lat: currentPoint.lat + 0.035,
+    lng: currentPoint.lng + 0.035,
+    address: dropoffAddress,
+  };
 
   useEffect(() => {
     void Location.requestForegroundPermissionsAsync().then(async ({ status }) => {
@@ -38,8 +44,48 @@ export function HomeMapScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
-        <Text style={styles.mapTitle}>{t('map')}</Text>
-        <Text style={styles.mapMeta}>{currentPoint.lat.toFixed(4)}, {currentPoint.lng.toFixed(4)}</Text>
+        <MapView
+          initialRegion={{
+            latitude: currentPoint.lat,
+            longitude: currentPoint.lng,
+            latitudeDelta: 0.08,
+            longitudeDelta: 0.08,
+          }}
+          region={{
+            latitude: currentPoint.lat,
+            longitude: currentPoint.lng,
+            latitudeDelta: 0.08,
+            longitudeDelta: 0.08,
+          }}
+          style={StyleSheet.absoluteFill}
+        >
+          <Marker
+            coordinate={{ latitude: currentPoint.lat, longitude: currentPoint.lng }}
+            pinColor="#0f766e"
+            title={pickupAddress}
+          />
+          {dropoffAddress ? (
+            <>
+              <Marker
+                coordinate={{ latitude: dropoffPoint.lat, longitude: dropoffPoint.lng }}
+                pinColor="#dc2626"
+                title={dropoffAddress}
+              />
+              <Polyline
+                coordinates={[
+                  { latitude: currentPoint.lat, longitude: currentPoint.lng },
+                  { latitude: dropoffPoint.lat, longitude: dropoffPoint.lng },
+                ]}
+                strokeColor="#111827"
+                strokeWidth={4}
+              />
+            </>
+          ) : null}
+        </MapView>
+        <View style={styles.mapBadge}>
+          <Text style={styles.mapTitle}>{t('map')}</Text>
+          <Text style={styles.mapMeta}>{currentPoint.lat.toFixed(4)}, {currentPoint.lng.toFixed(4)}</Text>
+        </View>
       </View>
       <View style={styles.panel}>
         <View style={styles.quickActions}>
@@ -58,7 +104,7 @@ export function HomeMapScreen({
           disabled={!dropoffAddress}
           onPress={() => onRouteSelected(
             { ...currentPoint, address: pickupAddress },
-            { lat: currentPoint.lat + 0.035, lng: currentPoint.lng + 0.035, address: dropoffAddress },
+            dropoffPoint,
           )}
           style={[styles.primaryButton, !dropoffAddress && styles.disabled]}
         >
@@ -71,9 +117,10 @@ export function HomeMapScreen({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#e2e8f0' },
-  map: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#dbeafe' },
-  mapTitle: { fontSize: 32, fontWeight: '800', color: '#0f172a' },
-  mapMeta: { marginTop: 8, color: '#334155' },
+  map: { flex: 1, backgroundColor: '#dbeafe' },
+  mapBadge: { position: 'absolute', left: 16, right: 16, top: 16, padding: 12, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.92)' },
+  mapTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
+  mapMeta: { marginTop: 4, color: '#334155' },
   panel: { padding: 16, backgroundColor: '#ffffff' },
   quickActions: { flexDirection: 'row', gap: 10 },
   secondaryButton: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, backgroundColor: '#ffffff' },

@@ -6,6 +6,7 @@ import { createOrder, logoutPassenger } from '@/services/api';
 import { getSession } from '@/services/session';
 import { TariffClass } from '@/services/types';
 import { tariffLabels } from '@/services/format';
+import { OrderMap } from '@/components/OrderMap';
 
 const defaultForm = {
   pickupAddress: 'Ангрен, центр',
@@ -74,6 +75,19 @@ export default function OrderPage() {
       </p>
 
       <form className="panel grid" onSubmit={handleSubmit}>
+        <OrderMap
+          pickup={{
+            address: form.pickupAddress,
+            lat: Number(form.pickupLat) || 41.0167,
+            lng: Number(form.pickupLng) || 70.1436,
+          }}
+          dropoff={{
+            address: form.dropoffAddress,
+            lat: Number(form.dropoffLat) || 41.024,
+            lng: Number(form.dropoffLng) || 70.169,
+          }}
+        />
+
         <div className="grid two-columns">
           <div className="field">
             <label htmlFor="pickupAddress">Адрес подачи</label>

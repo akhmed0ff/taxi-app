@@ -15,9 +15,11 @@ Browser MVP for the passenger app.
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:3000
+NEXT_PUBLIC_MAPBOX_TOKEN=pk.your-mapbox-public-token
 ```
 
-If the variable is not set, the app uses `http://localhost:3000`.
+If `NEXT_PUBLIC_API_URL` is not set, the app uses `http://localhost:3000`.
+If `NEXT_PUBLIC_MAPBOX_TOKEN` is not set, the order page shows a coordinate fallback instead of the Mapbox map.
 
 ## Commands
 

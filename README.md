@@ -207,6 +207,8 @@ Production env hardening:
 - Roadmap: [docs/roadmap.md](docs/roadmap.md)
 - Auth: [docs/auth.md](docs/auth.md)
 - Security: [docs/security.md](docs/security.md)
+- Maps: [docs/maps.md](docs/maps.md)
+- Redis GEO: [docs/redis.md](docs/redis.md)
 - Matching: [docs/matching.md](docs/matching.md)
 - Pricing: [docs/pricing.md](docs/pricing.md)
 - Деплой: [docs/deployment.md](docs/deployment.md)

@@ -32,12 +32,14 @@ export default function App() {
   const [status, setStatus] = useState<DriverStatus>('OFFLINE');
   const [offer, setOffer] = useState<OrderOffer>();
   const [trip, setTrip] = useState<ActiveTrip>();
+  const [driverPosition, setDriverPosition] = useState<{ lat: number; lng: number }>();
   const [earnedToday, setEarnedToday] = useState(0);
 
   useDriverLocationTracking({
     accessToken: session?.accessToken,
     driverId: session?.driverId,
     enabled: Boolean(session?.driverId) && status !== 'OFFLINE',
+    onLocation: setDriverPosition,
   });
 
   useEffect(() => {
@@ -208,6 +210,7 @@ export default function App() {
             setScreen('trip');
           }}
           trip={trip}
+          driverPosition={driverPosition}
         />
       )}
       {screen === 'trip' && trip && (
@@ -226,6 +229,7 @@ export default function App() {
             setTrip({ ...trip, status: 'IN_PROGRESS' });
           }}
           trip={trip}
+          driverPosition={driverPosition}
         />
       )}
       {screen === 'balance' && (

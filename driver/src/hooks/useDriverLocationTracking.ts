@@ -7,6 +7,7 @@ interface UseDriverLocationTrackingInput {
   driverId?: string;
   enabled: boolean;
   intervalMs?: number;
+  onLocation?: (coords: { lat: number; lng: number }) => void;
 }
 
 export function useDriverLocationTracking({
@@ -14,6 +15,7 @@ export function useDriverLocationTracking({
   accessToken,
   enabled,
   intervalMs = 2500,
+  onLocation,
 }: UseDriverLocationTrackingInput) {
   useEffect(() => {
     if (!enabled || !driverId || !accessToken) {
@@ -38,6 +40,10 @@ export function useDriverLocationTracking({
         }
 
         try {
+          onLocation?.({
+            lat: location.coords.latitude,
+            lng: location.coords.longitude,
+          });
           await updateDriverLocation(
             accessToken,
             driverId,
@@ -61,5 +67,5 @@ export function useDriverLocationTracking({
         clearInterval(timer);
       }
     };
-  }, [accessToken, driverId, enabled, intervalMs]);
+  }, [accessToken, driverId, enabled, intervalMs, onLocation]);
 }
