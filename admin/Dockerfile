@@ -9,14 +9,18 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_ADMIN_PHONE=+998900000001
 ARG NEXT_PUBLIC_ADMIN_PASSWORD
+ARG APP_ENV=production
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_ADMIN_PHONE=$NEXT_PUBLIC_ADMIN_PHONE
 ENV NEXT_PUBLIC_ADMIN_PASSWORD=$NEXT_PUBLIC_ADMIN_PASSWORD
+ENV NEXT_PUBLIC_APP_ENV=$APP_ENV
 RUN test -n "$NEXT_PUBLIC_API_URL" && \
-    test "$NEXT_PUBLIC_API_URL" != "http://localhost:3000" && \
-    test "$NEXT_PUBLIC_API_URL" != "http://127.0.0.1:3000" && \
     test -n "$NEXT_PUBLIC_ADMIN_PASSWORD" && \
-    test "$NEXT_PUBLIC_ADMIN_PASSWORD" != "password123"
+    if [ "$APP_ENV" = "production" ]; then \
+      test "$NEXT_PUBLIC_API_URL" != "http://localhost:3000" && \
+      test "$NEXT_PUBLIC_API_URL" != "http://127.0.0.1:3000" && \
+      test "$NEXT_PUBLIC_ADMIN_PASSWORD" != "password123"; \
+    fi
 COPY --from=deps /app/node_modules ./node_modules
 COPY package*.json ./
 COPY next.config.mjs ./

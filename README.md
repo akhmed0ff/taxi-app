@@ -194,6 +194,12 @@ Docker:
 docker compose up -d --build
 ```
 
+Local development:
+
+- See [docs/local-dev.md](docs/local-dev.md) for Docker/local startup variants.
+- For Docker Compose local dev, `.env` may use `NEXT_PUBLIC_API_URL=http://127.0.0.1:3000` and `NEXT_PUBLIC_ADMIN_PASSWORD=AdminDevPass123!`.
+- Production admin builds still reject localhost API URLs and weak admin passwords.
+
 Production env hardening:
 
 - `.env.example` is only for local development and must not be copied to production.
@@ -207,6 +213,7 @@ Production env hardening:
 - Roadmap: [docs/roadmap.md](docs/roadmap.md)
 - Auth: [docs/auth.md](docs/auth.md)
 - Security: [docs/security.md](docs/security.md)
+- Local development: [docs/local-dev.md](docs/local-dev.md)
 - Maps: [docs/maps.md](docs/maps.md)
 - Redis GEO: [docs/redis.md](docs/redis.md)
 - Matching: [docs/matching.md](docs/matching.md)

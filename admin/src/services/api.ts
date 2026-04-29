@@ -1,7 +1,8 @@
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
+const appEnv = process.env.NEXT_PUBLIC_APP_ENV ?? 'development';
 
 if (
-  process.env.NODE_ENV === 'production' &&
+  appEnv === 'production' &&
   (!configuredApiUrl ||
     configuredApiUrl === 'http://localhost:3000' ||
     configuredApiUrl === 'http://127.0.0.1:3000')
