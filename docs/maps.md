@@ -10,6 +10,7 @@ Environment:
 
 ```env
 NEXT_PUBLIC_MAPBOX_TOKEN=pk.your-mapbox-public-token
+MAPBOX_ACCESS_TOKEN=pk.your-mapbox-backend-token
 NEXT_PUBLIC_API_URL=http://localhost:3000
 ```
 
@@ -19,6 +20,24 @@ Behavior:
 - Pickup and dropoff markers update from the manual coordinate fields.
 - If `NEXT_PUBLIC_MAPBOX_TOKEN` is missing, the page shows a coordinate fallback.
 - No geocoding is performed in the MVP. Users still enter address text and lat/lng manually.
+
+## Backend Mapbox
+
+The backend uses `MAPBOX_ACCESS_TOKEN` through `MapboxService`.
+
+Methods:
+
+- `geocode(address)`
+- `reverseGeocode(lat, lng)`
+- `getRoute(originLat, originLng, destLat, destLng)`
+
+`OrderService` uses Mapbox Directions for route distance when `MAPBOX_ACCESS_TOKEN` is configured. If Mapbox is unavailable locally, it falls back to the existing Haversine distance calculation.
+
+Health check:
+
+```bash
+curl http://localhost:3000/health/mapbox
+```
 
 Local check:
 

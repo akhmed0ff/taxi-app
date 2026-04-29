@@ -118,11 +118,21 @@ function createPrismaMock() {
 
 async function main() {
   const { prisma, state } = createPrismaMock();
+  let rideLocked = false;
   const service = new OrderService(
     prisma as never,
     {} as never,
     {} as never,
-    {} as never,
+    {
+      acceptRideWithLock: async () => {
+        if (rideLocked) {
+          return false;
+        }
+
+        rideLocked = true;
+        return true;
+      },
+    } as never,
     {
       emitToDriver: () => undefined,
       emitToPassenger: () => undefined,
@@ -164,7 +174,7 @@ async function main() {
   assert.ok(rejectedReason instanceof BadRequestException);
   assert.match(
     rejectedReason.message,
-    /already been assigned|no longer searching/,
+    /already been assigned|no longer searching|already being accepted/,
   );
 }
 

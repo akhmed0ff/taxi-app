@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { RealtimeEvent } from '../../common/realtime-events';
 import { PrismaService } from '../../infrastructure/db/prisma.service';
 import { GeoService, NearbyDriver } from '../../infrastructure/redis/geo.service';
+import { RedisService } from '../../infrastructure/redis/redis.service';
 import { SocketGateway } from '../../infrastructure/socket/socket.gateway';
 import { DriverStatusValue } from '../driver/driver-status';
 import { OrderStatusValue } from '../order/order-status';
@@ -22,6 +23,7 @@ export class MatchingService {
     private readonly prisma: PrismaService,
     private readonly geo: GeoService,
     private readonly socket: SocketGateway,
+    @Optional() private readonly redis?: RedisService,
   ) {}
 
   async offerRideToNearbyDrivers(input: MatchRideInput) {
@@ -49,6 +51,11 @@ export class MatchingService {
     const expiresInSeconds = Math.ceil(input.offerTimeoutMs / 1000);
 
     for (const driver of onlineDrivers) {
+      await this.redis?.createRideOffer(
+        ride.id,
+        driver.driverId,
+        expiresInSeconds,
+      );
       this.socket.emitToDriver(driver.driverId, RealtimeEvent.NEW_ORDER, {
         ride,
         distanceMeters: driver.distanceMeters,

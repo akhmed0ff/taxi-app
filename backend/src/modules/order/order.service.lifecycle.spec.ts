@@ -287,6 +287,7 @@ function createCoreFlowMock() {
   };
 
   const redis = {
+    acceptRideWithLock: async () => true,
     client: {
       get: async () => null,
       set: async () => 'OK',

@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { AuthUser } from '../../common/auth/auth-user';
@@ -12,6 +13,7 @@ import { RealtimeEvent } from '../../common/realtime-events';
 import { UserRoleValue } from '../../common/roles';
 import { PrismaService } from '../../infrastructure/db/prisma.service';
 import { RedisService } from '../../infrastructure/redis/redis.service';
+import { MapboxService } from '../../infrastructure/maps/mapbox.service';
 import { SocketGateway } from '../../infrastructure/socket/socket.gateway';
 import { DriverStatusValue } from '../driver/driver-status';
 import { PaymentMethod, PaymentMethodValue } from '../payment/payment-method';
@@ -40,6 +42,7 @@ export class OrderService {
     private readonly redis: RedisService,
     private readonly socket: SocketGateway,
     @InjectQueue('ride-matching') private readonly rideMatchingQueue: Queue,
+    @Optional() private readonly mapbox?: MapboxService,
   ) {}
 
   async create(dto: CreateOrderDto) {
@@ -195,6 +198,13 @@ export class OrderService {
 
   async accept(rideId: string, driverId: string, user?: AuthUser) {
     await this.assertDriverActor(driverId, user);
+    const lockAcquired = await this.redis.acceptRideWithLock(rideId, driverId);
+
+    if (!lockAcquired) {
+      throw new BadRequestException(
+        'Ride is already being accepted by another driver',
+      );
+    }
 
     const ride = await this.prisma.$transaction(async (tx) => {
       const driverUpdate = await tx.driver.updateMany({
@@ -532,7 +542,7 @@ export class OrderService {
   }
 
   private async calculateEstimate(dto: CreateOrderDto) {
-    const distanceMeters = calculateDistanceMeters(
+    const distanceMeters = await this.calculateRouteDistanceMeters(
       dto.pickupLat,
       dto.pickupLng,
       dto.dropoffLat,
@@ -553,6 +563,34 @@ export class OrderService {
       fare: details.total,
       details,
     };
+  }
+
+  private async calculateRouteDistanceMeters(
+    pickupLat: number,
+    pickupLng: number,
+    dropoffLat: number,
+    dropoffLng: number,
+  ) {
+    if (this.mapbox?.isConfigured()) {
+      try {
+        const route = await this.mapbox.getRoute(
+          pickupLat,
+          pickupLng,
+          dropoffLat,
+          dropoffLng,
+        );
+        return route.distanceMeters;
+      } catch {
+        return calculateDistanceMeters(
+          pickupLat,
+          pickupLng,
+          dropoffLat,
+          dropoffLng,
+        );
+      }
+    }
+
+    return calculateDistanceMeters(pickupLat, pickupLng, dropoffLat, dropoffLng);
   }
 
   private async getActiveTariff(tariffClass: TariffClass) {

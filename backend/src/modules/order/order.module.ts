@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { SocketModule } from '../../infrastructure/socket/socket.module';
 import { RedisModule } from '../../infrastructure/redis/redis.module';
+import { MapsModule } from '../../infrastructure/maps/maps.module';
 import { AuthModule } from '../auth/auth.module';
 import { PaymentModule } from '../payment/payment.module';
 import { PricingModule } from '../pricing/pricing.module';
@@ -23,6 +24,7 @@ import { OrderService } from './order.service';
     PaymentModule,
     PricingModule,
     RedisModule,
+    MapsModule,
     SocketModule,
   ],
   controllers: [OrderController],

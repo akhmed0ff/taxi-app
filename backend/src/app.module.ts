@@ -6,6 +6,7 @@ import { QueueModule } from './infrastructure/queue/queue.module';
 import { NotificationsModule } from './infrastructure/queue/notifications/notifications.module';
 import { ObservabilityModule } from './infrastructure/observability/observability.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
+import { createRedisOptions } from './infrastructure/redis/redis.service';
 import { SocketModule } from './infrastructure/socket/socket.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { DriverModule } from './modules/driver/driver.module';
@@ -21,10 +22,7 @@ import { UserModule } from './modules/user/user.module';
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        connection: {
-          host: config.get<string>('REDIS_HOST', 'localhost'),
-          port: config.get<number>('REDIS_PORT', 6379),
-        },
+        connection: createRedisOptions(config),
       }),
     }),
     PrismaModule,

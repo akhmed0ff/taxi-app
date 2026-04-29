@@ -2,12 +2,35 @@
 
 Redis stores live driver coordinates for fast matching. PostgreSQL remains the source of truth for users, rides and driver status.
 
+## Environment
+
+For local Redis:
+
+```env
+REDIS_URL=redis://localhost:6379
+```
+
+For Upstash Redis:
+
+```env
+REDIS_URL=rediss://default:<password>@<host>:6379
+```
+
+Redis key names are configurable:
+
+```env
+REDIS_DRIVERS_GEO_KEY=drivers:geo
+REDIS_DRIVER_STATUS_KEY_PREFIX=driver:status
+REDIS_RIDE_OFFER_KEY_PREFIX=ride:offer
+REDIS_RIDE_LOCK_KEY_PREFIX=ride:lock
+```
+
 ## Data Key
 
 Driver coordinates are stored in a Redis GEO sorted set:
 
 ```text
-drivers
+drivers:geo
 ```
 
 Each member is the backend `driverId`.
@@ -22,16 +45,34 @@ PATCH /drivers/:driverId/location
 
 The backend allows location updates only when the driver is `ONLINE` or `BUSY`.
 
-`GeoService.updateDriverLocation(driverId, lat, lng)` writes:
+`RedisService.updateDriverLocation(driverId, lat, lng)` writes:
 
 ```text
-GEOADD drivers <lng> <lat> <driverId>
+GEOADD drivers:geo <lng> <lat> <driverId>
 ```
 
 When a driver goes `OFFLINE`, `GeoService.removeDriverLocation(driverId)` removes the member from Redis:
 
 ```text
-ZREM drivers <driverId>
+ZREM drivers:geo <driverId>
+```
+
+Driver status heartbeat:
+
+```text
+SET driver:status:{driverId} ONLINE EX 60
+```
+
+Ride offer TTL:
+
+```text
+SET ride:offer:{rideId}:{driverId} PENDING EX 10
+```
+
+Ride accept lock:
+
+```text
+SET ride:lock:{rideId} {driverId} NX EX 30
 ```
 
 ## Reads
@@ -97,6 +138,12 @@ Expected:
 
 ```text
 PONG
+```
+
+Backend health check:
+
+```bash
+curl http://localhost:3000/health/redis
 ```
 
 Without Redis, `/health` fails and ride matching cannot search nearby drivers.

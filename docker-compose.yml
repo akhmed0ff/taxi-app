@@ -49,12 +49,18 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-taxi}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-taxi_app}?schema=public
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_DRIVERS_GEO_KEY: ${REDIS_DRIVERS_GEO_KEY:-drivers:geo}
+      REDIS_DRIVER_STATUS_KEY_PREFIX: ${REDIS_DRIVER_STATUS_KEY_PREFIX:-driver:status}
+      REDIS_RIDE_OFFER_KEY_PREFIX: ${REDIS_RIDE_OFFER_KEY_PREFIX:-ride:offer}
+      REDIS_RIDE_LOCK_KEY_PREFIX: ${REDIS_RIDE_LOCK_KEY_PREFIX:-ride:lock}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
       REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-30}
       NEXT_PUBLIC_ADMIN_PASSWORD: ${NEXT_PUBLIC_ADMIN_PASSWORD:?NEXT_PUBLIC_ADMIN_PASSWORD is required}
+      MAPBOX_ACCESS_TOKEN: ${MAPBOX_ACCESS_TOKEN:-}
     ports:
       - "${BACKEND_BIND:-127.0.0.1}:${BACKEND_PORT:-3000}:3000"
     healthcheck:
@@ -83,6 +89,7 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-taxi}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-taxi_app}?schema=public
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       NEXT_PUBLIC_ADMIN_PASSWORD: ${NEXT_PUBLIC_ADMIN_PASSWORD:?NEXT_PUBLIC_ADMIN_PASSWORD is required}
     command: ["npx", "prisma", "migrate", "deploy"]
