@@ -50,14 +50,24 @@ export class HealthController {
       };
     }
 
-    const route = await this.mapbox.getRoute(41.0167, 70.1436, 41.024, 70.169);
+    try {
+      const route = await this.mapbox.getRoute(41.0167, 70.1436, 41.024, 70.169);
 
-    return {
-      ok: true,
-      service: 'mapbox',
-      configured: true,
-      distanceMeters: route.distanceMeters,
-      checkedAt: new Date().toISOString(),
-    };
+      return {
+        ok: true,
+        service: 'mapbox',
+        configured: true,
+        distanceMeters: route.distanceMeters,
+        checkedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        service: 'mapbox',
+        configured: true,
+        error: error instanceof Error ? error.message : 'Mapbox check failed',
+        checkedAt: new Date().toISOString(),
+      };
+    }
   }
 }

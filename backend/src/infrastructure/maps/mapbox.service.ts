@@ -22,7 +22,12 @@ export class MapboxService {
   }
 
   isConfigured() {
-    return Boolean(this.accessToken);
+    return Boolean(
+      this.accessToken &&
+        !['replace_me', 'mapbox-token-for-backend-directions'].includes(
+          this.accessToken,
+        ),
+    );
   }
 
   async geocode(address: string) {
