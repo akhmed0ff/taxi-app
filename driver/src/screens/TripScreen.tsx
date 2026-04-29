@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import { MapPlaceholder } from '../components/MapPlaceholder';
 import { t } from '../i18n';
 import { ActiveTrip, Coords } from '../types/order';
 
@@ -17,33 +17,28 @@ export function TripScreen({ driverPosition, trip, onStart, onComplete }: TripSc
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
-        <MapView
-          initialRegion={{
-            latitude: current.lat,
-            longitude: current.lng,
-            latitudeDelta: 0.08,
-            longitudeDelta: 0.08,
-          }}
-          region={{
-            latitude: current.lat,
-            longitude: current.lng,
-            latitudeDelta: 0.08,
-            longitudeDelta: 0.08,
-          }}
-          style={StyleSheet.absoluteFill}
-        >
-          <Marker coordinate={{ latitude: current.lat, longitude: current.lng }} pinColor="#111827" title="Водитель" />
-          <Marker coordinate={{ latitude: trip.pickup.lat, longitude: trip.pickup.lng }} pinColor="#0f766e" title={trip.pickupAddress} />
-          <Marker coordinate={{ latitude: trip.dropoff.lat, longitude: trip.dropoff.lng }} pinColor="#dc2626" title={trip.dropoffAddress} />
-          <Polyline
-            coordinates={[
-              { latitude: trip.pickup.lat, longitude: trip.pickup.lng },
-              { latitude: trip.dropoff.lat, longitude: trip.dropoff.lng },
-            ]}
-            strokeColor="#1d4ed8"
-            strokeWidth={4}
-          />
-        </MapView>
+        <MapPlaceholder
+          points={[
+            {
+              label: 'Driver',
+              lat: current.lat,
+              lng: current.lng,
+            },
+            {
+              label: 'Pickup',
+              lat: trip.pickup.lat,
+              lng: trip.pickup.lng,
+              address: trip.pickupAddress,
+            },
+            {
+              label: 'Dropoff',
+              lat: trip.dropoff.lat,
+              lng: trip.dropoff.lng,
+              address: trip.dropoffAddress,
+            },
+          ]}
+          subtitle={trip.dropoffAddress}
+        />
         <View style={styles.mapBadge}>
           <Text style={styles.mapTitle}>{isInProgress ? t('tripInProgress') : t('passengerNearby')}</Text>
           <Text style={styles.mapMeta}>{trip.dropoffAddress}</Text>

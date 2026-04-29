@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import { MapPlaceholder } from '../components/MapPlaceholder';
 import { t } from '../i18n';
 import { Order } from '../types/order';
 
@@ -16,35 +16,28 @@ export function TripScreen({ onCancel, order }: TripScreenProps) {
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
-        <MapView
-          initialRegion={{
-            latitude: order.driverLocation?.lat ?? order.pickup.lat,
-            longitude: order.driverLocation?.lng ?? order.pickup.lng,
-            latitudeDelta: 0.08,
-            longitudeDelta: 0.08,
-          }}
-          region={{
-            latitude: order.driverLocation?.lat ?? order.pickup.lat,
-            longitude: order.driverLocation?.lng ?? order.pickup.lng,
-            latitudeDelta: 0.08,
-            longitudeDelta: 0.08,
-          }}
-          style={StyleSheet.absoluteFill}
-        >
-          <Marker coordinate={{ latitude: order.pickup.lat, longitude: order.pickup.lng }} pinColor="#0f766e" title={order.pickup.address} />
-          <Marker coordinate={{ latitude: order.dropoff.lat, longitude: order.dropoff.lng }} pinColor="#dc2626" title={order.dropoff.address} />
-          {order.driverLocation ? (
-            <Marker coordinate={{ latitude: order.driverLocation.lat, longitude: order.driverLocation.lng }} pinColor="#111827" title="Водитель" />
-          ) : null}
-          <Polyline
-            coordinates={[
-              { latitude: order.pickup.lat, longitude: order.pickup.lng },
-              { latitude: order.dropoff.lat, longitude: order.dropoff.lng },
-            ]}
-            strokeColor="#14532d"
-            strokeWidth={4}
-          />
-        </MapView>
+        <MapPlaceholder
+          points={[
+            {
+              label: 'Pickup',
+              lat: order.pickup.lat,
+              lng: order.pickup.lng,
+              address: order.pickup.address,
+            },
+            {
+              label: 'Dropoff',
+              lat: order.dropoff.lat,
+              lng: order.dropoff.lng,
+              address: order.dropoff.address,
+            },
+            {
+              label: 'Driver',
+              lat: order.driverLocation?.lat,
+              lng: order.driverLocation?.lng,
+            },
+          ]}
+          subtitle={copy.subtitle}
+        />
         <View style={styles.mapBadge}>
           <Feather color="#14532d" name="navigation" size={18} />
           <Text style={styles.mapTitle}>{copy.title}</Text>
@@ -159,8 +152,6 @@ const styles = StyleSheet.create({
   point: { position: 'absolute', width: 22, height: 22, borderRadius: 11, borderWidth: 4, borderColor: '#ffffff' },
   pickupPoint: { left: 48, top: '44%', backgroundColor: '#16a34a' },
   dropoffPoint: { right: 48, top: '50%', backgroundColor: '#ef4444' },
-  carMarker: { position: 'absolute', left: '42%', top: '43%', width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111827' },
-  carMarkerMoving: { left: '58%', top: '47%' },
   mapBadge: { position: 'absolute', left: 16, right: 16, top: 16, padding: 12, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.92)' },
   mapTitle: { fontSize: 18, fontWeight: '800', color: '#14532d' },
   mapMeta: { marginTop: 4, color: '#166534', fontWeight: '700' },

@@ -1,7 +1,7 @@
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import { MapPlaceholder } from '../components/MapPlaceholder';
 import { t } from '../i18n';
 import { Point } from '../types/order';
 
@@ -44,44 +44,23 @@ export function HomeMapScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
-        <MapView
-          initialRegion={{
-            latitude: currentPoint.lat,
-            longitude: currentPoint.lng,
-            latitudeDelta: 0.08,
-            longitudeDelta: 0.08,
-          }}
-          region={{
-            latitude: currentPoint.lat,
-            longitude: currentPoint.lng,
-            latitudeDelta: 0.08,
-            longitudeDelta: 0.08,
-          }}
-          style={StyleSheet.absoluteFill}
-        >
-          <Marker
-            coordinate={{ latitude: currentPoint.lat, longitude: currentPoint.lng }}
-            pinColor="#0f766e"
-            title={pickupAddress}
-          />
-          {dropoffAddress ? (
-            <>
-              <Marker
-                coordinate={{ latitude: dropoffPoint.lat, longitude: dropoffPoint.lng }}
-                pinColor="#dc2626"
-                title={dropoffAddress}
-              />
-              <Polyline
-                coordinates={[
-                  { latitude: currentPoint.lat, longitude: currentPoint.lng },
-                  { latitude: dropoffPoint.lat, longitude: dropoffPoint.lng },
-                ]}
-                strokeColor="#111827"
-                strokeWidth={4}
-              />
-            </>
-          ) : null}
-        </MapView>
+        <MapPlaceholder
+          points={[
+            {
+              label: 'Pickup',
+              lat: currentPoint.lat,
+              lng: currentPoint.lng,
+              address: pickupAddress,
+            },
+            {
+              label: 'Dropoff',
+              lat: dropoffAddress ? dropoffPoint.lat : undefined,
+              lng: dropoffAddress ? dropoffPoint.lng : undefined,
+              address: dropoffAddress,
+            },
+          ]}
+          subtitle={t('map')}
+        />
         <View style={styles.mapBadge}>
           <Text style={styles.mapTitle}>{t('map')}</Text>
           <Text style={styles.mapMeta}>{currentPoint.lat.toFixed(4)}, {currentPoint.lng.toFixed(4)}</Text>

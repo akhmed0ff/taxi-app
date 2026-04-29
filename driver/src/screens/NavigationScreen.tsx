@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import { MapPlaceholder } from '../components/MapPlaceholder';
 import { t } from '../i18n';
 import { ActiveTrip, Coords } from '../types/order';
 
@@ -17,32 +17,22 @@ export function NavigationScreen({ driverPosition, onArrived, onCancel, trip }: 
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
-        <MapView
-          initialRegion={{
-            latitude: current.lat,
-            longitude: current.lng,
-            latitudeDelta: 0.08,
-            longitudeDelta: 0.08,
-          }}
-          region={{
-            latitude: current.lat,
-            longitude: current.lng,
-            latitudeDelta: 0.08,
-            longitudeDelta: 0.08,
-          }}
-          style={StyleSheet.absoluteFill}
-        >
-          <Marker coordinate={{ latitude: current.lat, longitude: current.lng }} pinColor="#111827" title="Водитель" />
-          <Marker coordinate={{ latitude: trip.pickup.lat, longitude: trip.pickup.lng }} pinColor="#0f766e" title={trip.pickupAddress} />
-          <Polyline
-            coordinates={[
-              { latitude: current.lat, longitude: current.lng },
-              { latitude: trip.pickup.lat, longitude: trip.pickup.lng },
-            ]}
-            strokeColor="#14532d"
-            strokeWidth={4}
-          />
-        </MapView>
+        <MapPlaceholder
+          points={[
+            {
+              label: 'Driver',
+              lat: current.lat,
+              lng: current.lng,
+            },
+            {
+              label: 'Pickup',
+              lat: trip.pickup.lat,
+              lng: trip.pickup.lng,
+              address: trip.pickupAddress,
+            },
+          ]}
+          subtitle={trip.pickupAddress}
+        />
         <View style={styles.mapBadge}>
           <Feather color="#14532d" name="map-pin" size={22} />
           <Text style={styles.mapTitle}>{t('navigation')}</Text>
