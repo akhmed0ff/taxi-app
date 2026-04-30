@@ -1,4 +1,4 @@
-export type TariffClass = 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+export type TariffClass = 'STANDARD' | 'COMFORT' | 'COMFORT_PLUS' | 'DELIVERY';
 
 export type OrderStatus =
   | 'CREATED'
@@ -19,6 +19,9 @@ export interface DriverPreview {
   id: string;
   name: string;
   car: string;
+  eta?: string;
+  plate?: string;
+  phone?: string;
   rating: number;
   etaMinutes: number;
 }

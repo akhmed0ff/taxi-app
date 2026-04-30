@@ -44,15 +44,15 @@ export interface FareBreakdown {
 }
 
 export const DEFAULT_ANGREN_TARIFFS: Record<TariffClass, AngrenTariff> = {
-  ECONOMY: {
-    tariffClass: TariffClassValue.ECONOMY,
+  STANDARD: {
+    tariffClass: TariffClassValue.STANDARD,
     city: 'Angren',
-    baseFare: 7000,
+    baseFare: 3800,
     perKm: 2000,
     freeWaitingMinutes: 3,
     waitingPerMinute: 500,
     stopPerMinute: 500,
-    minimumFare: 12000,
+    minimumFare: 3800,
     active: true,
   },
   COMFORT: {
@@ -66,15 +66,26 @@ export const DEFAULT_ANGREN_TARIFFS: Record<TariffClass, AngrenTariff> = {
     minimumFare: 16000,
     active: true,
   },
-  PREMIUM: {
-    tariffClass: TariffClassValue.PREMIUM,
+  COMFORT_PLUS: {
+    tariffClass: TariffClassValue.COMFORT_PLUS,
     city: 'Angren',
-    baseFare: 15000,
+    baseFare: 6500,
     perKm: 3500,
     freeWaitingMinutes: 3,
     waitingPerMinute: 500,
     stopPerMinute: 500,
-    minimumFare: 25000,
+    minimumFare: 6500,
+    active: true,
+  },
+  DELIVERY: {
+    tariffClass: TariffClassValue.DELIVERY,
+    city: 'Angren',
+    baseFare: 8800,
+    perKm: 3500,
+    freeWaitingMinutes: 3,
+    waitingPerMinute: 500,
+    stopPerMinute: 500,
+    minimumFare: 8800,
     active: true,
   },
 };
@@ -170,7 +181,7 @@ export class PricingService {
   }
 
   getDefaultTariff(tariffClass: TariffClass = DEFAULT_TARIFF_CLASS) {
-    return DEFAULT_ANGREN_TARIFFS[tariffClass] ?? DEFAULT_ANGREN_TARIFFS.ECONOMY;
+    return DEFAULT_ANGREN_TARIFFS[tariffClass] ?? DEFAULT_ANGREN_TARIFFS.STANDARD;
   }
 
   private applyMinimumFare(rawFare: number, minimumFare: number) {

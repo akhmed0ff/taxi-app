@@ -6,22 +6,14 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
-import { TariffClassValue } from '../tariff-class';
+import { TARIFF_CLASS_VALUES } from '../tariff-class';
 
 export class UpsertTariffDto {
   @ApiProperty({
-    enum: [
-      TariffClassValue.ECONOMY,
-      TariffClassValue.COMFORT,
-      TariffClassValue.PREMIUM,
-    ],
+    enum: TARIFF_CLASS_VALUES,
   })
   @IsString()
-  @IsIn([
-    TariffClassValue.ECONOMY,
-    TariffClassValue.COMFORT,
-    TariffClassValue.PREMIUM,
-  ])
+  @IsIn(TARIFF_CLASS_VALUES)
   tariffClass: string;
 
   @ApiPropertyOptional({ example: 'Angren' })

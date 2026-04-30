@@ -1,10 +1,13 @@
 export const TariffClassValue = {
-  ECONOMY: 'ECONOMY',
+  STANDARD: 'STANDARD',
   COMFORT: 'COMFORT',
-  PREMIUM: 'PREMIUM',
+  COMFORT_PLUS: 'COMFORT_PLUS',
+  DELIVERY: 'DELIVERY',
 } as const;
 
 export type TariffClass =
   (typeof TariffClassValue)[keyof typeof TariffClassValue];
 
-export const DEFAULT_TARIFF_CLASS: TariffClass = TariffClassValue.ECONOMY;
+export const TARIFF_CLASS_VALUES = Object.values(TariffClassValue);
+
+export const DEFAULT_TARIFF_CLASS: TariffClass = TariffClassValue.STANDARD;

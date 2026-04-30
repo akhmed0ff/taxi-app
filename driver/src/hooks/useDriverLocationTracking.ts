@@ -14,7 +14,7 @@ export function useDriverLocationTracking({
   driverId,
   accessToken,
   enabled,
-  intervalMs = 2500,
+  intervalMs = 5000,
   onLocation,
 }: UseDriverLocationTrackingInput) {
   useEffect(() => {

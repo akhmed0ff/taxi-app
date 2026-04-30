@@ -21,6 +21,7 @@ export interface OrderOffer {
   price: number;
   distanceMeters: number;
   expiresInSeconds: number;
+  tariffClass?: string;
 }
 
 export interface ActiveTrip extends OrderOffer {

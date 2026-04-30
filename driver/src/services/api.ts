@@ -4,14 +4,19 @@ import {
   RideHistoryItem,
   TripStatus,
 } from '../types/order';
+import {
+  authorizedFetch,
+  clearDriverSession,
+  DriverDevSession,
+  getDriverDevSession,
+  saveDriverSession,
+} from '../api/client';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
-
-export interface DriverSession {
-  accessToken: string;
-  refreshToken: string;
-  driverId: string;
-}
+const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').replace(
+  /\/+$/,
+  '',
+);
+export type DriverSession = DriverDevSession;
 
 interface AuthResponse {
   accessToken: string;
@@ -25,70 +30,11 @@ interface AuthResponse {
 }
 
 export async function loginDriver(phone = process.env.EXPO_PUBLIC_DRIVER_PHONE ?? '+998901112233'): Promise<DriverSession> {
-  const password = process.env.EXPO_PUBLIC_DRIVER_PASSWORD ?? 'password123';
-  const data = await registerDriver({
-    phone,
-    password,
-    name: 'Driver',
-  }).catch((error) => {
-    if (!isConflictError(error)) {
-      throw error;
-    }
-
-    return loginDriverWithPassword({ phone, password });
-  });
-
-  if (!data.driver?.id) {
-    throw new Error('Driver profile is missing');
-  }
-
-  return {
-    accessToken: data.accessToken,
-    refreshToken: data.refreshToken,
-    driverId: data.driver.id,
-  };
+  return getDriverDevSession(phone);
 }
 
-export async function registerDriver(input: {
-  phone: string;
-  password: string;
-  name: string;
-}): Promise<AuthResponse> {
-  const registerResponse = await fetch(`${API_URL}/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...input,
-      role: 'DRIVER',
-    }),
-  });
-
-  if (registerResponse.ok) {
-    return registerResponse.json();
-  }
-
-  if (registerResponse.status !== 409) {
-    throw new Error(await readError(registerResponse, 'Failed to register driver'));
-  }
-
-  throw new Error('PHONE_ALREADY_REGISTERED');
-}
-
-export async function loginDriverWithPassword(input: {
-  phone: string;
-  password: string;
-}): Promise<AuthResponse> {
-  const loginResponse = await fetch(`${API_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-
-  if (!loginResponse.ok) {
-    throw new Error(await readError(loginResponse, 'Failed to login driver'));
-  }
-
-  return loginResponse.json();
+export async function ensureDriverDevSession(): Promise<DriverSession> {
+  return getDriverDevSession();
 }
 
 export async function refreshDriverSession(
@@ -110,11 +56,11 @@ export async function refreshDriverSession(
     throw new Error('Driver profile is missing');
   }
 
-  return {
+  return saveDriverSession({
     accessToken: data.accessToken,
     refreshToken: data.refreshToken,
     driverId: data.driver.id,
-  };
+  });
 }
 
 export async function logoutDriver(refreshToken: string) {
@@ -128,7 +74,9 @@ export async function logoutDriver(refreshToken: string) {
     throw new Error(await readError(response, 'Failed to logout driver'));
   }
 
-  return response.json();
+  const body = await response.json();
+  await clearDriverSession();
+  return body;
 }
 
 export async function updateDriverStatus(
@@ -136,14 +84,13 @@ export async function updateDriverStatus(
   driverId: string,
   status: DriverStatus,
 ) {
-  const response = await fetch(`${API_URL}/drivers/${driverId}/status`, {
+  const response = await authorizedFetch(`/drivers/${driverId}/status`, {
     method: 'PATCH',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ status }),
-  });
+  }, accessToken);
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to update driver status'));
@@ -158,14 +105,13 @@ export async function updateDriverLocation(
   lat: number,
   lng: number,
 ) {
-  const response = await fetch(`${API_URL}/drivers/${driverId}/location`, {
+  const response = await authorizedFetch(`/drivers/${driverId}/location`, {
     method: 'PATCH',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ lat, lng }),
-  });
+  }, accessToken);
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to update driver location'));
@@ -179,10 +125,9 @@ export async function acceptOrder(
   orderId: string,
   driverId: string,
 ) {
-  const response = await fetch(`${API_URL}/orders/${orderId}/accept/${driverId}`, {
+  const response = await authorizedFetch(`/orders/${orderId}/accept/${driverId}`, {
     method: 'PATCH',
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  }, accessToken);
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to accept order'));
@@ -192,10 +137,9 @@ export async function acceptOrder(
 }
 
 export async function markArrived(accessToken: string, orderId: string) {
-  const response = await fetch(`${API_URL}/orders/${orderId}/arrive`, {
+  const response = await authorizedFetch(`/orders/${orderId}/arrive`, {
     method: 'PATCH',
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  }, accessToken);
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to mark arrived'));
@@ -205,10 +149,9 @@ export async function markArrived(accessToken: string, orderId: string) {
 }
 
 export async function startTrip(accessToken: string, orderId: string) {
-  const response = await fetch(`${API_URL}/orders/${orderId}/start`, {
+  const response = await authorizedFetch(`/orders/${orderId}/start`, {
     method: 'PATCH',
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  }, accessToken);
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to start trip'));
@@ -218,14 +161,13 @@ export async function startTrip(accessToken: string, orderId: string) {
 }
 
 export async function completeTrip(accessToken: string, orderId: string) {
-  const response = await fetch(`${API_URL}/orders/${orderId}/complete`, {
+  const response = await authorizedFetch(`/orders/${orderId}/complete`, {
     method: 'PATCH',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ paymentMethod: 'CASH' }),
-  });
+  }, accessToken);
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to complete trip'));
@@ -239,14 +181,13 @@ export async function cancelOrder(
   orderId: string,
   reason = 'DRIVER_CANCELLED',
 ) {
-  const response = await fetch(`${API_URL}/orders/${orderId}/cancel`, {
+  const response = await authorizedFetch(`/orders/${orderId}/cancel`, {
     method: 'PATCH',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ reason }),
-  });
+  }, accessToken);
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to cancel order'));
@@ -259,9 +200,11 @@ export async function fetchDriverRideHistory(
   accessToken: string,
   filter: RideHistoryFilter = 'completed',
 ): Promise<RideHistoryItem[]> {
-  const response = await fetch(`${API_URL}/orders/history/driver?filter=${filter}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const response = await authorizedFetch(
+    `/orders/history/driver?filter=${filter}`,
+    {},
+    accessToken,
+  );
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to load driver history'));
@@ -331,8 +274,4 @@ function normalizeTripStatus(status: BackendRide['status']): RideHistoryItem['st
 async function readError(response: Response, fallback: string) {
   const body = await response.text();
   return body ? `${fallback}: ${body}` : fallback;
-}
-
-function isConflictError(error: unknown) {
-  return error instanceof Error && error.message === 'PHONE_ALREADY_REGISTERED';
 }

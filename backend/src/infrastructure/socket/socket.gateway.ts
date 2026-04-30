@@ -1,3 +1,4 @@
+import { Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
@@ -10,6 +11,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { UserRole, UserRoleValue } from '../../common/roles';
 import { PrismaService } from '../db/prisma.service';
+import { RedisService } from '../redis/redis.service';
 
 interface AccessTokenPayload {
   sub: string;
@@ -37,6 +39,7 @@ export class SocketGateway implements OnGatewayConnection {
   constructor(
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
+    @Optional() private readonly redis?: RedisService,
   ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
@@ -94,6 +97,77 @@ export class SocketGateway implements OnGatewayConnection {
     }
 
     void client.join(`order:${orderId}`);
+    return { ok: true };
+  }
+
+  @SubscribeMessage('passenger.join')
+  joinPassenger(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody('passengerId') passengerId: string,
+  ) {
+    if (
+      client.data.role !== UserRoleValue.PASSENGER ||
+      client.data.userId !== passengerId
+    ) {
+      return { ok: false };
+    }
+
+    void client.join(`passenger:${passengerId}`);
+    return { ok: true };
+  }
+
+  @SubscribeMessage('driver.join')
+  joinDriver(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody('driverId') driverId: string,
+  ) {
+    if (
+      client.data.role !== UserRoleValue.DRIVER ||
+      client.data.driverId !== driverId
+    ) {
+      return { ok: false };
+    }
+
+    void client.join(`driver:${driverId}`);
+    return { ok: true };
+  }
+
+  @SubscribeMessage('driver.status')
+  updateDriverSocketStatus(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody('driverId') driverId: string,
+    @MessageBody('status') status: string,
+  ) {
+    if (
+      client.data.role !== UserRoleValue.DRIVER ||
+      client.data.driverId !== driverId
+    ) {
+      return { ok: false };
+    }
+
+    this.emitToAdmins('DRIVER_SOCKET_STATUS', {
+      driverId,
+      status,
+      socketId: client.id,
+    });
+
+    return { ok: true };
+  }
+
+  @SubscribeMessage('ride.reject')
+  async rejectRideOffer(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody('rideId') rideId: string,
+    @MessageBody('driverId') driverId: string,
+  ) {
+    if (
+      client.data.role !== UserRoleValue.DRIVER ||
+      client.data.driverId !== driverId
+    ) {
+      return { ok: false };
+    }
+
+    await this.redis?.rejectRideOffer(rideId, driverId);
     return { ok: true };
   }
 

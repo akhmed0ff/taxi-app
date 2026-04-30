@@ -92,11 +92,21 @@ async function testOnlyOnlineDriversReceiveOffers() {
   });
 
   assert.equal(result.offeredDrivers, 1);
-  assert.equal(state.emitted.length, 1);
-  assert.equal(state.emitted[0].driverId, 'driver-online');
-  assert.equal(state.emitted[0].event, RealtimeEvent.NEW_ORDER);
+  assert.equal(state.emitted.length, 2);
+  assert.deepEqual(
+    state.emitted.map((event) => event.driverId),
+    ['driver-online', 'driver-online'],
+  );
+  assert.deepEqual(
+    state.emitted.map((event) => event.event),
+    [RealtimeEvent.NEW_ORDER, RealtimeEvent.NEW_RIDE_OFFER_LOWER],
+  );
   assert.equal(
     (state.emitted[0].payload as { expiresInSeconds: number }).expiresInSeconds,
+    10,
+  );
+  assert.equal(
+    (state.emitted[1].payload as { expiresInSeconds: number }).expiresInSeconds,
     10,
   );
 }

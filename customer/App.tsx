@@ -3,7 +3,7 @@ import { SafeAreaView, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { CompletionScreen } from './src/screens/CompletionScreen';
-import { HomeMapScreen } from './src/screens/HomeMapScreen';
+import { HomeScreen } from './src/screens/HomeScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { SearchDriverScreen } from './src/screens/SearchDriverScreen';
 import { TariffScreen } from './src/screens/TariffScreen';
@@ -12,6 +12,7 @@ import {
   cancelOrder,
   createOrder,
   CustomerSession,
+  ensurePassengerDevSession,
   loginPassenger,
   logoutPassenger,
   refreshPassengerSession,
@@ -31,11 +32,22 @@ export default function App() {
   const canSelectTariff = useMemo(() => pickup && dropoff, [dropoff, pickup]);
 
   useEffect(() => {
+    void ensurePassengerDevSession()
+      .then((nextSession) => {
+        setSession(nextSession);
+        setScreen('home');
+      })
+      .catch((error) => {
+        console.warn(error);
+      });
+  }, []);
+
+  useEffect(() => {
     if (!session?.accessToken) {
       return;
     }
 
-    realtimeClient.connect(session.accessToken);
+    realtimeClient.connect(session.accessToken, session.customerId);
     return () => realtimeClient.disconnect();
   }, [session?.accessToken]);
 
@@ -71,19 +83,19 @@ export default function App() {
         const nextOrder = { ...current, ...payload };
 
         if (
-          nextOrder.status === 'DRIVER_ASSIGNED' ||
           nextOrder.status === 'DRIVER_ARRIVED' ||
           nextOrder.status === 'IN_PROGRESS'
         ) {
-          setScreen('trip');
+          setScreen('home');
         }
 
         if (nextOrder.status === 'COMPLETED') {
-          setScreen('complete');
+          setScreen('home');
         }
 
         if (nextOrder.status === 'CANCELLED') {
           setScreen('home');
+          return undefined;
         }
 
         return nextOrder;
@@ -110,6 +122,31 @@ export default function App() {
       console.warn(error);
       setScreen('tariff');
     }
+  }
+
+  async function handleHomeOrderRequested(
+    nextPickup: Point,
+    nextDropoff: Point,
+    tariff: TariffClass,
+  ): Promise<Order> {
+    if (!session) {
+      throw new Error('Passenger session is not ready');
+    }
+
+    setPickup(nextPickup);
+    setDropoff(nextDropoff);
+
+    const createdOrder = await createOrder({
+      accessToken: session.accessToken,
+      customerId: session.customerId,
+      pickup: nextPickup,
+      dropoff: nextDropoff,
+      tariff,
+    });
+
+    setOrder(createdOrder);
+    setScreen('home');
+    return createdOrder;
   }
 
   async function handleAuthenticated(phone: string) {
@@ -156,14 +193,12 @@ export default function App() {
         />
       )}
       {screen === 'home' && (
-        <HomeMapScreen
+        <HomeScreen
+          onCancelOrder={handleCancelOrder}
           onLogout={handleLogout}
+          onOrderRequested={handleHomeOrderRequested}
           onOpenHistory={() => setScreen('history')}
-          onRouteSelected={(nextPickup, nextDropoff) => {
-            setPickup(nextPickup);
-            setDropoff(nextDropoff);
-            setScreen('tariff');
-          }}
+          order={order}
         />
       )}
       {screen === 'history' && session && (

@@ -3,6 +3,7 @@ import { t } from '../i18n';
 import { DriverStatus } from '../types/order';
 
 interface OnlineScreenProps {
+  connectionLabel?: string;
   status: DriverStatus;
   onToggleOnline: () => void;
   onOpenHistory: () => void;
@@ -10,6 +11,7 @@ interface OnlineScreenProps {
 }
 
 export function OnlineScreen({
+  connectionLabel,
   onLogout,
   onOpenHistory,
   status,
@@ -21,6 +23,9 @@ export function OnlineScreen({
     <View style={styles.screen}>
       <Text style={styles.title}>{t('driver')}</Text>
       <Text style={styles.subtitle}>{isOnline ? t('online') : t('offline')}</Text>
+      {connectionLabel ? (
+        <Text style={styles.connectionStatus}>{connectionLabel}</Text>
+      ) : null}
       <Pressable onPress={onToggleOnline} style={[styles.statusButton, isOnline && styles.onlineButton]}>
         <Text style={styles.statusButtonText}>{isOnline ? t('goOffline') : t('goOnline')}</Text>
       </Pressable>
@@ -42,6 +47,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#f8fafc' },
   title: { fontSize: 36, fontWeight: '900', color: '#0f172a' },
   subtitle: { marginTop: 8, fontSize: 18, color: '#475569' },
+  connectionStatus: { marginTop: 8, color: '#b91c1c', fontSize: 15, fontWeight: '800' },
   statusButton: { height: 58, marginTop: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#111827' },
   onlineButton: { backgroundColor: '#b91c1c' },
   statusButtonText: { color: '#ffffff', fontSize: 17, fontWeight: '800' },

@@ -14,8 +14,11 @@ export class DevLoginDto {
 
   @ApiProperty({
     enum: [UserRoleValue.PASSENGER, UserRoleValue.DRIVER, UserRoleValue.ADMIN],
+    required: false,
+    default: UserRoleValue.PASSENGER,
   })
+  @IsOptional()
   @IsString()
   @IsIn([UserRoleValue.PASSENGER, UserRoleValue.DRIVER, UserRoleValue.ADMIN])
-  role: string;
+  role?: string;
 }

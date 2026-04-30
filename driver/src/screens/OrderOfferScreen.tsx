@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { t } from '../i18n';
 import { OrderOffer } from '../types/order';
@@ -7,12 +7,20 @@ interface OrderOfferScreenProps {
   offer: OrderOffer;
   onAccept: () => void;
   onDecline: () => void;
+  isAccepting?: boolean;
 }
 
-export function OrderOfferScreen({ offer, onAccept, onDecline }: OrderOfferScreenProps) {
+export function OrderOfferScreen({
+  isAccepting = false,
+  offer,
+  onAccept,
+  onDecline,
+}: OrderOfferScreenProps) {
   const [secondsLeft, setSecondsLeft] = useState(offer.expiresInSeconds);
+  const expiredRef = useRef(false);
 
   useEffect(() => {
+    expiredRef.current = false;
     setSecondsLeft(offer.expiresInSeconds);
   }, [offer.id, offer.expiresInSeconds]);
 
@@ -22,7 +30,10 @@ export function OrderOfferScreen({ offer, onAccept, onDecline }: OrderOfferScree
   }, []);
 
   useEffect(() => {
-    if (secondsLeft === 0) onDecline();
+    if (secondsLeft === 0 && !expiredRef.current) {
+      expiredRef.current = true;
+      onDecline();
+    }
   }, [onDecline, secondsLeft]);
 
   return (
@@ -49,18 +60,30 @@ export function OrderOfferScreen({ offer, onAccept, onDecline }: OrderOfferScree
           <Text style={styles.summaryLabel}>Цена</Text>
           <Text style={styles.summaryValue}>{offer.price.toLocaleString()} {t('som')}</Text>
         </View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Тариф</Text>
+          <Text style={styles.summaryValue}>{formatTariff(offer.tariffClass)}</Text>
+        </View>
       </View>
 
       <View style={styles.actions}>
         <Pressable onPress={onDecline} style={styles.secondaryButton}>
           <Text style={styles.secondaryText}>{t('skip')}</Text>
         </Pressable>
-        <Pressable onPress={onAccept} style={styles.primaryButton}>
-          <Text style={styles.primaryText}>{t('accept')}</Text>
+        <Pressable disabled={isAccepting} onPress={onAccept} style={[styles.primaryButton, isAccepting && styles.disabledButton]}>
+          <Text style={styles.primaryText}>{isAccepting ? 'Принимаем...' : t('accept')}</Text>
         </Pressable>
       </View>
     </View>
   );
+}
+
+function formatTariff(tariffClass?: string) {
+  if (tariffClass === 'STANDARD') return 'Стандарт';
+  if (tariffClass === 'COMFORT') return 'Комфорт';
+  if (tariffClass === 'COMFORT_PLUS') return 'Комфорт+';
+  if (tariffClass === 'DELIVERY') return 'Доставка';
+  return 'Стандарт';
 }
 
 function RoutePoint({ label, value }: { label: string; value: string }) {
@@ -83,13 +106,14 @@ const styles = StyleSheet.create({
   divider: { height: 1, marginVertical: 14, backgroundColor: '#e2e8f0' },
   label: { color: '#64748b', fontWeight: '700' },
   address: { marginTop: 4, fontSize: 17, fontWeight: '800', color: '#111827' },
-  summaryRow: { flexDirection: 'row', gap: 12, marginTop: 14 },
-  summaryCard: { flex: 1, minHeight: 74, padding: 12, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, backgroundColor: '#ffffff' },
+  summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 14 },
+  summaryCard: { flexGrow: 1, minWidth: '30%', minHeight: 74, padding: 12, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, backgroundColor: '#ffffff' },
   summaryLabel: { color: '#64748b', fontWeight: '700' },
   summaryValue: { marginTop: 6, fontSize: 18, fontWeight: '900', color: '#111827' },
   actions: { flexDirection: 'row', gap: 12, marginTop: 22 },
   secondaryButton: { flex: 1, height: 52, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, backgroundColor: '#ffffff' },
   primaryButton: { flex: 1, height: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#16a34a' },
+  disabledButton: { opacity: 0.55 },
   secondaryText: { fontWeight: '800', color: '#111827' },
   primaryText: { fontWeight: '900', color: '#ffffff' },
 });

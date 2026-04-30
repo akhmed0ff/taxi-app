@@ -1,0 +1,271 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export interface CustomerDevSession {
+  accessToken: string;
+  refreshToken: string;
+  customerId: string;
+  user: {
+    id: string;
+    phone?: string;
+    name?: string;
+    role?: string;
+  };
+}
+
+interface DevLoginResponse {
+  accessToken?: string;
+  access_token?: string;
+  token?: string;
+  refreshToken?: string;
+  refresh_token?: string;
+  tokens?: {
+    accessToken?: string;
+    access_token?: string;
+    refreshToken?: string;
+    refresh_token?: string;
+  };
+  data?: {
+    accessToken?: string;
+    access_token?: string;
+    token?: string;
+    refreshToken?: string;
+    refresh_token?: string;
+    tokens?: {
+      accessToken?: string;
+      access_token?: string;
+      refreshToken?: string;
+      refresh_token?: string;
+    };
+  };
+  user: {
+    id: string;
+  };
+}
+
+const API_URL = normalizeApiUrl(
+  process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000',
+);
+const SESSION_STORAGE_KEY = 'angren-taxi:customer-session';
+const DEV_PASSENGER_PHONE =
+  process.env.EXPO_PUBLIC_CUSTOMER_PHONE ?? '+998900000001';
+
+let accessToken: string | null = null;
+let session: CustomerDevSession | null = null;
+
+export async function getDevAccessToken() {
+  if (accessToken) {
+    devLog('TOKEN EXISTS true');
+    return accessToken;
+  }
+
+  const currentSession = await getStoredCustomerSession();
+  if (currentSession?.accessToken) {
+    devLog('TOKEN EXISTS true');
+    return currentSession.accessToken;
+  }
+
+  devLog('TOKEN EXISTS false');
+  devLog('token missing, running dev-login');
+  const nextSession = await devLoginPassenger();
+  return nextSession.accessToken;
+}
+
+export async function getCustomerDevSession(phone?: string) {
+  const currentSession = await getStoredCustomerSession();
+  if (currentSession?.accessToken) {
+    devLog('TOKEN EXISTS true');
+    return currentSession;
+  }
+
+  devLog('TOKEN EXISTS false');
+  devLog('token missing, running dev-login');
+  return devLoginPassenger(phone);
+}
+
+export async function authorizedFetch(
+  path: string,
+  options: RequestInit = {},
+  token?: string,
+) {
+  const currentToken = token ?? (await getDevAccessToken());
+  devLog(`request path ${path}`);
+  devLog(`Authorization header exists ${Boolean(currentToken)}`);
+  const response = await fetch(
+    `${API_URL}${path}`,
+    withAuthorization(options, currentToken),
+  );
+
+  if (response.status !== 401) {
+    return response;
+  }
+
+  devLog('protected request returned 401, refreshing dev token');
+  await clearCustomerSession();
+  const nextSession = await devLoginPassenger();
+  return fetch(`${API_URL}${path}`, withAuthorization(options, nextSession.accessToken));
+}
+
+export async function saveCustomerSession(nextSession: CustomerDevSession) {
+  session = nextSession;
+  accessToken = nextSession.accessToken;
+  await AsyncStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextSession));
+  return nextSession;
+}
+
+export async function clearCustomerSession() {
+  session = null;
+  accessToken = null;
+  await AsyncStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+async function devLoginPassenger(
+  phone = DEV_PASSENGER_PHONE,
+): Promise<CustomerDevSession> {
+  devLog(`API URL: ${API_URL}`);
+  devLog(`dev-login phone ${phone}`);
+  devLog('dev-login role PASSENGER');
+  const response = await fetch(`${API_URL}/auth/dev-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      phone,
+      name: 'Local Passenger',
+      role: 'PASSENGER',
+    }),
+  });
+  devLog(`dev-login status ${response.status}`);
+  const data = (await response.json()) as DevLoginResponse;
+  devLog(`response body dev-login ${JSON.stringify(maskDevLoginBody(data))}`);
+
+  if (!response.ok) {
+    throw new Error(`Dev login failed: ${response.status}`);
+  }
+
+  const nextAccessToken = extractAccessToken(data);
+  if (!nextAccessToken) {
+    throw new Error('Dev login did not return accessToken');
+  }
+
+  devLog('dev-login success');
+  return saveCustomerSession({
+    accessToken: nextAccessToken,
+    refreshToken: extractRefreshToken(data),
+    customerId: data.user.id,
+    user: data.user,
+  });
+}
+
+async function getStoredCustomerSession() {
+  if (session) {
+    return session;
+  }
+
+  const rawSession = await AsyncStorage.getItem(SESSION_STORAGE_KEY);
+  if (!rawSession) {
+    return null;
+  }
+
+  session = JSON.parse(rawSession) as CustomerDevSession;
+  if (!session.accessToken || !session.customerId) {
+    await clearCustomerSession();
+    return null;
+  }
+
+  accessToken = session.accessToken;
+  return session;
+}
+
+function withAuthorization(options: RequestInit, token: string): RequestInit {
+  devLog('protected request with token');
+  return {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  };
+}
+
+function extractAccessToken(data: DevLoginResponse) {
+  return (
+    data.accessToken ||
+    data.access_token ||
+    data.token ||
+    data.tokens?.accessToken ||
+    data.tokens?.access_token ||
+    data.data?.accessToken ||
+    data.data?.access_token ||
+    data.data?.token ||
+    data.data?.tokens?.accessToken ||
+    data.data?.tokens?.access_token ||
+    ''
+  );
+}
+
+function extractRefreshToken(data: DevLoginResponse) {
+  return (
+    data.refreshToken ||
+    data.refresh_token ||
+    data.tokens?.refreshToken ||
+    data.tokens?.refresh_token ||
+    data.data?.refreshToken ||
+    data.data?.refresh_token ||
+    data.data?.tokens?.refreshToken ||
+    data.data?.tokens?.refresh_token ||
+    ''
+  );
+}
+
+function maskDevLoginBody(data: DevLoginResponse) {
+  return {
+    ...data,
+    accessToken: maskToken(data.accessToken),
+    access_token: maskToken(data.access_token),
+    token: maskToken(data.token),
+    refreshToken: maskToken(data.refreshToken),
+    refresh_token: maskToken(data.refresh_token),
+    tokens: data.tokens
+      ? {
+          ...data.tokens,
+          accessToken: maskToken(data.tokens.accessToken),
+          access_token: maskToken(data.tokens.access_token),
+          refreshToken: maskToken(data.tokens.refreshToken),
+          refresh_token: maskToken(data.tokens.refresh_token),
+        }
+      : undefined,
+    data: data.data
+      ? {
+          ...data.data,
+          accessToken: maskToken(data.data.accessToken),
+          access_token: maskToken(data.data.access_token),
+          token: maskToken(data.data.token),
+          refreshToken: maskToken(data.data.refreshToken),
+          refresh_token: maskToken(data.data.refresh_token),
+          tokens: data.data.tokens
+            ? {
+                ...data.data.tokens,
+                accessToken: maskToken(data.data.tokens.accessToken),
+                access_token: maskToken(data.data.tokens.access_token),
+                refreshToken: maskToken(data.data.tokens.refreshToken),
+                refresh_token: maskToken(data.data.tokens.refresh_token),
+              }
+            : undefined,
+        }
+      : undefined,
+  };
+}
+
+function maskToken(token?: string) {
+  return token ? `${token.slice(0, 16)}...` : token;
+}
+
+function normalizeApiUrl(url: string) {
+  return url.replace(/\/+$/, '');
+}
+
+function devLog(message: string) {
+  if (__DEV__) {
+    console.log(`[customer-api] ${message}`);
+  }
+}

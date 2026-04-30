@@ -180,16 +180,17 @@ export class AuthService {
       throw new ForbiddenException('dev-login is disabled');
     }
 
+    const role = (dto.role ?? UserRoleValue.PASSENGER) as UserRole;
     const user = await this.prisma.user.upsert({
       where: { phone: dto.phone },
       update: {
         name: dto.name,
-        role: dto.role,
+        role,
       },
       create: {
         phone: dto.phone,
         name: dto.name,
-        role: dto.role,
+        role,
       },
     });
     const driver = await this.ensureDriverProfile(

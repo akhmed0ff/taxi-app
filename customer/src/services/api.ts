@@ -7,14 +7,20 @@ import {
   TariffClass,
   FareBreakdown,
 } from '../types/order';
+import {
+  authorizedFetch,
+  clearCustomerSession,
+  CustomerDevSession,
+  getCustomerDevSession,
+  saveCustomerSession,
+} from '../api/client';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
+const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').replace(
+  /\/+$/,
+  '',
+);
 
-export interface CustomerSession {
-  accessToken: string;
-  refreshToken: string;
-  customerId: string;
-}
+export type CustomerSession = CustomerDevSession;
 
 interface AuthResponse {
   accessToken: string;
@@ -25,7 +31,7 @@ interface AuthResponse {
 }
 
 export interface CreateOrderInput {
-  accessToken: string;
+  accessToken?: string;
   customerId: string;
   pickup: Point;
   dropoff: Point;
@@ -54,66 +60,11 @@ interface BackendRide {
 }
 
 export async function loginPassenger(phone: string): Promise<CustomerSession> {
-  const password = process.env.EXPO_PUBLIC_CUSTOMER_PASSWORD ?? 'password123';
-  const data = await registerPassenger({
-    phone,
-    password,
-    name: 'Passenger',
-  }).catch((error) => {
-    if (!isConflictError(error)) {
-      throw error;
-    }
-
-    return loginPassengerWithPassword({ phone, password });
-  });
-
-  return {
-    accessToken: data.accessToken,
-    refreshToken: data.refreshToken,
-    customerId: data.user.id,
-  };
+  return getCustomerDevSession(phone);
 }
 
-export async function registerPassenger(input: {
-  phone: string;
-  password: string;
-  name: string;
-}): Promise<AuthResponse> {
-  const registerResponse = await fetch(`${API_URL}/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...input,
-      role: 'PASSENGER',
-    }),
-  });
-
-  if (registerResponse.ok) {
-    return registerResponse.json();
-  }
-
-  if (registerResponse.status !== 409) {
-    throw new Error(await readError(registerResponse, 'Failed to register passenger'));
-  }
-
-  throw new Error('PHONE_ALREADY_REGISTERED');
-}
-
-export async function loginPassengerWithPassword(input: {
-  phone: string;
-  password: string;
-}): Promise<AuthResponse> {
-  const loginResponse = await fetch(`${API_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-
-  if (!loginResponse.ok) {
-    throw new Error(await readError(loginResponse, 'Failed to login passenger'));
-  }
-
-  return loginResponse.json();
+export async function ensurePassengerDevSession(): Promise<CustomerSession> {
+  return getCustomerDevSession();
 }
 
 export async function refreshPassengerSession(
@@ -130,11 +81,12 @@ export async function refreshPassengerSession(
   }
 
   const data = (await response.json()) as AuthResponse;
-  return {
+  return saveCustomerSession({
     accessToken: data.accessToken,
     refreshToken: data.refreshToken,
     customerId: data.user.id,
-  };
+    user: data.user,
+  });
 }
 
 export async function logoutPassenger(refreshToken: string) {
@@ -148,27 +100,31 @@ export async function logoutPassenger(refreshToken: string) {
     throw new Error(await readError(response, 'Failed to logout passenger'));
   }
 
-  return response.json();
+  const body = await response.json();
+  await clearCustomerSession();
+  return body;
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
-  const response = await fetch(`${API_URL}/orders`, {
+  const response = await authorizedFetch('/orders', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${input.accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       customerId: input.customerId,
       pickupLat: input.pickup.lat,
       pickupLng: input.pickup.lng,
+      destinationLat: input.dropoff.lat,
+      destinationLng: input.dropoff.lng,
       pickupAddress: input.pickup.address,
       dropoffLat: input.dropoff.lat,
       dropoffLng: input.dropoff.lng,
       dropoffAddress: input.dropoff.address,
+      class: input.tariff,
       tariffClass: input.tariff,
     }),
-  });
+  }, input.accessToken);
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to create order'));
@@ -182,14 +138,13 @@ export async function cancelOrder(
   orderId: string,
   reason = 'PASSENGER_CANCELLED',
 ) {
-  const response = await fetch(`${API_URL}/orders/${orderId}/cancel`, {
+  const response = await authorizedFetch(`/orders/${orderId}/cancel`, {
     method: 'PATCH',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ reason }),
-  });
+  }, accessToken);
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to cancel order'));
@@ -202,9 +157,11 @@ export async function fetchPassengerRideHistory(
   accessToken: string,
   filter: RideHistoryFilter,
 ): Promise<RideHistoryItem[]> {
-  const response = await fetch(`${API_URL}/orders/history/passenger?filter=${filter}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const response = await authorizedFetch(
+    `/orders/history/passenger?filter=${filter}`,
+    {},
+    accessToken,
+  );
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to load ride history'));
@@ -216,7 +173,7 @@ export async function fetchPassengerRideHistory(
 
 export function mapRideToOrder(
   ride: BackendRide,
-  tariff: TariffClass = 'ECONOMY',
+  tariff: TariffClass = 'STANDARD',
 ): Order {
   return {
     id: ride.id,
@@ -248,7 +205,7 @@ export function mapRideToOrder(
 
 function mapRideToHistoryItem(ride: BackendRide): RideHistoryItem {
   return {
-    ...mapRideToOrder(ride, ride.tariffClass ?? 'ECONOMY'),
+    ...mapRideToOrder(ride, ride.tariffClass ?? 'STANDARD'),
     createdAt: ride.createdAt,
     paymentStatus: ride.payment?.status,
   };
@@ -257,8 +214,4 @@ function mapRideToHistoryItem(ride: BackendRide): RideHistoryItem {
 async function readError(response: Response, fallback: string) {
   const body = await response.text();
   return body ? `${fallback}: ${body}` : fallback;
-}
-
-function isConflictError(error: unknown) {
-  return error instanceof Error && error.message === 'PHONE_ALREADY_REGISTERED';
 }

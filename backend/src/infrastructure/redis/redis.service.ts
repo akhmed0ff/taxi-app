@@ -125,6 +125,13 @@ export class RedisService implements OnModuleDestroy {
     return { key, ttlSeconds };
   }
 
+  async rejectRideOffer(rideId: string, driverId: string) {
+    const key = this.rideOfferKey(rideId, driverId);
+    this.logger.log(`Redis ride offer reject ride=${rideId} driver=${driverId}`);
+    await this.client.del(key);
+    return { key };
+  }
+
   async acceptRideWithLock(rideId: string, driverId: string) {
     const key = this.rideLockKey(rideId);
     const result = await this.client.set(key, driverId, 'EX', 30, 'NX');

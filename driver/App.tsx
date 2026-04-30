@@ -1,20 +1,24 @@
+import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
-import { SafeAreaView, StyleSheet } from 'react-native';
+import { Alert, SafeAreaView, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import {
   acceptOrder,
   cancelOrder,
   completeTrip,
   DriverSession,
+  ensureDriverDevSession,
   loginDriver,
   logoutDriver,
   markArrived,
   refreshDriverSession,
   startTrip,
   updateDriverStatus,
+  updateDriverLocation,
 } from './src/services/api';
 import { driverRealtimeClient } from './src/services/realtime';
 import { useDriverLocationTracking } from './src/hooks/useDriverLocationTracking';
+import { useDriverRideState } from './src/state/driverRideState';
 import { BalanceScreen } from './src/screens/BalanceScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
@@ -22,7 +26,7 @@ import { NavigationScreen } from './src/screens/NavigationScreen';
 import { OnlineScreen } from './src/screens/OnlineScreen';
 import { OrderOfferScreen } from './src/screens/OrderOfferScreen';
 import { TripScreen } from './src/screens/TripScreen';
-import { ActiveTrip, DriverStatus, OrderOffer } from './src/types/order';
+import { DriverStatus } from './src/types/order';
 
 type Screen = 'auth' | 'online' | 'offer' | 'navigation' | 'trip' | 'balance' | 'history';
 
@@ -30,10 +34,35 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('auth');
   const [session, setSession] = useState<DriverSession>();
   const [status, setStatus] = useState<DriverStatus>('OFFLINE');
-  const [offer, setOffer] = useState<OrderOffer>();
-  const [trip, setTrip] = useState<ActiveTrip>();
   const [driverPosition, setDriverPosition] = useState<{ lat: number; lng: number }>();
   const [earnedToday, setEarnedToday] = useState(0);
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const [isAcceptingOffer, setIsAcceptingOffer] = useState(false);
+  const {
+    acceptOffer,
+    backOnline,
+    completeRide,
+    declineOffer,
+    goOffline,
+    goOnline,
+    markArrived: markDriverArrivedState,
+    receiveOffer,
+    reset,
+    startRide,
+    state: rideState,
+  } = useDriverRideState();
+  const { offer, trip } = rideState;
+
+  useEffect(() => {
+    void ensureDriverDevSession()
+      .then((nextSession) => {
+        setSession(nextSession);
+        setScreen('online');
+      })
+      .catch((error) => {
+        console.warn(error);
+      });
+  }, []);
 
   useDriverLocationTracking({
     accessToken: session?.accessToken,
@@ -43,36 +72,48 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (!session?.accessToken) {
+    if (!session?.accessToken || !session.driverId) {
       return;
     }
 
-    driverRealtimeClient.connect(session.accessToken);
+    driverRealtimeClient.connect(
+      session.accessToken,
+      session.driverId,
+      setIsSocketConnected,
+    );
     const unsubscribeNewOrder = driverRealtimeClient.onNewOrder((nextOffer) => {
-      setOffer({
+      if (status !== 'ONLINE') {
+        return;
+      }
+
+      receiveOffer({
         ...nextOffer,
         expiresInSeconds: nextOffer.expiresInSeconds ?? 10,
       });
       setScreen('offer');
     });
     const unsubscribeCancelled = driverRealtimeClient.onRideCancelled((rideId) => {
-      setTrip((current) => {
-        if (!current || current.id !== rideId) {
-          return current;
-        }
-
+      if (trip?.id === rideId) {
         setStatus('ONLINE');
+        backOnline();
         setScreen('online');
-        return undefined;
-      });
+      }
     });
 
     return () => {
       unsubscribeNewOrder();
       unsubscribeCancelled();
       driverRealtimeClient.disconnect();
+      setIsSocketConnected(false);
     };
-  }, [session?.accessToken]);
+  }, [
+    backOnline,
+    receiveOffer,
+    session?.accessToken,
+    session?.driverId,
+    status,
+    trip?.id,
+  ]);
 
   useEffect(() => {
     if (!session?.refreshToken) {
@@ -86,12 +127,13 @@ export default function App() {
           console.warn(error);
           setSession(undefined);
           setStatus('OFFLINE');
+          reset();
           setScreen('auth');
         });
     }, 1000 * 60 * 10);
 
     return () => clearInterval(timer);
-  }, [session?.refreshToken]);
+  }, [reset, session?.refreshToken]);
 
   async function handleAuthenticated(phone: string) {
     try {
@@ -111,31 +153,84 @@ export default function App() {
     const nextStatus = status === 'OFFLINE' ? 'ONLINE' : 'OFFLINE';
 
     try {
+      if (nextStatus === 'OFFLINE') {
+        setStatus('OFFLINE');
+        goOffline();
+        await updateDriverStatus(session.accessToken, session.driverId, nextStatus);
+        driverRealtimeClient.emitDriverStatus(session.driverId, nextStatus);
+        return;
+      }
+
+      if (nextStatus === 'ONLINE') {
+        const permission = await Location.requestForegroundPermissionsAsync();
+
+        if (permission.status !== 'granted') {
+          console.warn('Location permission is required to go online');
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({});
+        setDriverPosition({
+          lat: location.coords.latitude,
+          lng: location.coords.longitude,
+        });
+      }
+
       await updateDriverStatus(session.accessToken, session.driverId, nextStatus);
+      driverRealtimeClient.emitDriverStatus(session.driverId, nextStatus);
       setStatus(nextStatus);
+      goOnline();
+
+      if (nextStatus === 'ONLINE') {
+        const location = await Location.getCurrentPositionAsync({});
+        await updateDriverLocation(
+          session.accessToken,
+          session.driverId,
+          location.coords.latitude,
+          location.coords.longitude,
+        );
+        setDriverPosition({
+          lat: location.coords.latitude,
+          lng: location.coords.longitude,
+        });
+      }
     } catch (error) {
       console.warn(error);
+      setStatus(status);
     }
   }
 
   async function handleAcceptOffer() {
-    if (!offer || !session) {
+    if (!offer || !session || isAcceptingOffer) {
       return;
     }
 
     const acceptedOffer = offer;
 
+    setIsAcceptingOffer(true);
     try {
       await acceptOrder(session.accessToken, acceptedOffer.id, session.driverId);
       setStatus('BUSY');
-      setTrip({ ...acceptedOffer, status: 'ACCEPTED' });
-      setOffer(undefined);
+      acceptOffer(acceptedOffer);
       setScreen('navigation');
     } catch (error) {
       console.warn(error);
-      setOffer(undefined);
+      Alert.alert('Заказ уже принят другим водителем');
+      declineOffer();
       setScreen('online');
+    } finally {
+      setIsAcceptingOffer(false);
     }
+  }
+
+  function handleDeclineOffer() {
+    if (offer && session?.driverId) {
+      driverRealtimeClient.rejectRideOffer(offer.id, session.driverId);
+    }
+
+    declineOffer();
+    setStatus('ONLINE');
+    setScreen('online');
   }
 
   async function handleCancelTrip() {
@@ -145,7 +240,7 @@ export default function App() {
 
     try {
       await cancelOrder(session.accessToken, trip.id);
-      setTrip(undefined);
+      backOnline();
       setStatus('ONLINE');
       setScreen('online');
     } catch (error) {
@@ -165,8 +260,7 @@ export default function App() {
     driverRealtimeClient.disconnect();
     setSession(undefined);
     setStatus('OFFLINE');
-    setOffer(undefined);
-    setTrip(undefined);
+    reset();
     setScreen('auth');
   }
 
@@ -181,6 +275,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenHistory={() => setScreen('history')}
           onToggleOnline={toggleOnline}
+          connectionLabel={isSocketConnected ? undefined : 'Нет соединения'}
           status={status}
         />
       )}
@@ -194,10 +289,8 @@ export default function App() {
         <OrderOfferScreen
           offer={offer}
           onAccept={handleAcceptOffer}
-          onDecline={() => {
-            setOffer(undefined);
-            setScreen('online');
-          }}
+          onDecline={handleDeclineOffer}
+          isAccepting={isAcceptingOffer}
         />
       )}
       {screen === 'navigation' && trip && (
@@ -206,7 +299,7 @@ export default function App() {
           onArrived={async () => {
             if (!session) return;
             await markArrived(session.accessToken, trip.id);
-            setTrip({ ...trip, status: 'DRIVER_ARRIVED' });
+            markDriverArrivedState();
             setScreen('trip');
           }}
           trip={trip}
@@ -219,14 +312,14 @@ export default function App() {
             if (!session) return;
             await completeTrip(session.accessToken, trip.id);
             setEarnedToday((value) => value + trip.price);
-            setTrip({ ...trip, status: 'COMPLETED' });
+            completeRide();
             setStatus('ONLINE');
             setScreen('balance');
           }}
           onStart={async () => {
             if (!session) return;
             await startTrip(session.accessToken, trip.id);
-            setTrip({ ...trip, status: 'IN_PROGRESS' });
+            startRide();
           }}
           trip={trip}
           driverPosition={driverPosition}
@@ -235,7 +328,10 @@ export default function App() {
       {screen === 'balance' && (
         <BalanceScreen
           earnedToday={earnedToday}
-          onBackOnline={() => setScreen('online')}
+          onBackOnline={() => {
+            backOnline();
+            setScreen('online');
+          }}
         />
       )}
     </SafeAreaView>

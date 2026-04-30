@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { DevLoginDto } from './dto/dev-login.dto';
@@ -38,7 +38,10 @@ export class AuthController {
   // Development-only shortcut for local/mobile integration. Replace with OTP/password auth before production.
   @Post('dev-login')
   @ApiOperation({ summary: 'Development-only login shortcut' })
-  devLogin(@Body() dto: DevLoginDto) {
-    return this.authService.devLogin(dto);
+  devLogin(@Body() dto: DevLoginDto, @Query('role') role?: string) {
+    return this.authService.devLogin({
+      ...dto,
+      role: role ?? dto.role,
+    });
   }
 }

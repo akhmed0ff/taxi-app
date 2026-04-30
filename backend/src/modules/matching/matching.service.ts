@@ -61,6 +61,15 @@ export class MatchingService {
         distanceMeters: driver.distanceMeters,
         expiresInSeconds,
       });
+      this.socket.emitToDriver(
+        driver.driverId,
+        RealtimeEvent.NEW_RIDE_OFFER_LOWER,
+        {
+          ride,
+          distanceMeters: driver.distanceMeters,
+          expiresInSeconds,
+        },
+      );
     }
 
     this.logger.log(

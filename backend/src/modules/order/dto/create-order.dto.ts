@@ -3,7 +3,7 @@ import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import {
   DEFAULT_TARIFF_CLASS,
   TariffClass,
-  TariffClassValue,
+  TARIFF_CLASS_VALUES,
 } from '../../pricing/tariff-class';
 
 export class CreateOrderDto {
@@ -38,19 +38,11 @@ export class CreateOrderDto {
   dropoffAddress?: string;
 
   @ApiPropertyOptional({
-    enum: [
-      TariffClassValue.ECONOMY,
-      TariffClassValue.COMFORT,
-      TariffClassValue.PREMIUM,
-    ],
+    enum: TARIFF_CLASS_VALUES,
     default: DEFAULT_TARIFF_CLASS,
   })
   @IsOptional()
   @IsString()
-  @IsIn([
-    TariffClassValue.ECONOMY,
-    TariffClassValue.COMFORT,
-    TariffClassValue.PREMIUM,
-  ])
+  @IsIn(TARIFF_CLASS_VALUES)
   tariffClass?: TariffClass = DEFAULT_TARIFF_CLASS;
 }

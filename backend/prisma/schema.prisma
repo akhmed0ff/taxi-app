@@ -78,7 +78,7 @@ model Ride {
   customerId     String
   driverId       String?
   status         String     @default("CREATED")
-  tariffClass    String     @default("ECONOMY")
+  tariffClass    String     @default("STANDARD")
   pickupLat      Float
   pickupLng      Float
   pickupAddress  String?

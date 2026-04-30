@@ -244,7 +244,17 @@ export class OrderService {
         },
       });
 
-      const assignedRide = await tx.ride.findUnique({ where: { id: rideId } });
+      const assignedRide = await tx.ride.findUnique({
+        where: { id: rideId },
+        include: {
+          driver: {
+            include: {
+              user: true,
+              vehicle: true,
+            },
+          },
+        },
+      });
 
       if (!assignedRide) {
         throw new NotFoundException('Ride not found');
@@ -255,6 +265,14 @@ export class OrderService {
 
     this.socket.emitToDriver(driverId, RealtimeEvent.DRIVER_ACCEPTED, ride);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.DRIVER_ACCEPTED, ride);
+    this.socket.emitToPassenger(
+      ride.customerId,
+      RealtimeEvent.DRIVER_ASSIGNED_LOWER,
+      {
+        driver: mapRideDriverForSocket(ride),
+        ride,
+      },
+    );
     this.socket.emitToOrder(ride.id, RealtimeEvent.DRIVER_ACCEPTED, ride);
     this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, ride);
     this.socket.emitToAdmins(RealtimeEvent.DRIVER_UPDATED, {
@@ -271,6 +289,11 @@ export class OrderService {
 
     this.socket.emitToOrder(ride.id, RealtimeEvent.DRIVER_ARRIVED, ride);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.DRIVER_ARRIVED, ride);
+    this.socket.emitToPassenger(
+      ride.customerId,
+      RealtimeEvent.DRIVER_ARRIVED_LOWER,
+      { ride },
+    );
     this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, ride);
     return ride;
   }
@@ -280,6 +303,12 @@ export class OrderService {
     const ride = await this.transitionRide(rideId, OrderStatusValue.IN_PROGRESS);
 
     this.socket.emitToOrder(ride.id, RealtimeEvent.TRIP_STARTED, ride);
+    this.socket.emitToPassenger(ride.customerId, RealtimeEvent.TRIP_STARTED, ride);
+    this.socket.emitToPassenger(
+      ride.customerId,
+      RealtimeEvent.RIDE_STARTED_LOWER,
+      { ride },
+    );
     this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, ride);
     return ride;
   }
@@ -334,6 +363,11 @@ export class OrderService {
     const payload = { ride, payment };
     this.socket.emitToOrder(ride.id, RealtimeEvent.TRIP_COMPLETED, payload);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.TRIP_COMPLETED, payload);
+    this.socket.emitToPassenger(
+      ride.customerId,
+      RealtimeEvent.RIDE_COMPLETED_LOWER,
+      payload,
+    );
     this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, payload);
 
     return payload;
@@ -609,6 +643,37 @@ export class OrderService {
     await this.redis.client.set(cacheKey, JSON.stringify(tariff), 'EX', 60);
     return tariff;
   }
+}
+
+function mapRideDriverForSocket(ride: {
+  driver?: {
+    id: string;
+    rating: number;
+    user?: { name?: string | null; phone?: string | null } | null;
+    vehicle?: {
+      make: string;
+      model: string;
+      plateNumber: string;
+    } | null;
+  } | null;
+  driverId?: string | null;
+}) {
+  if (!ride.driver) {
+    return undefined;
+  }
+
+  return {
+    id: ride.driver.id,
+    driverName: ride.driver.user?.name ?? ride.driver.user?.phone ?? 'Водитель',
+    rating: ride.driver.rating,
+    car: ride.driver.vehicle
+      ? `${ride.driver.vehicle.make} ${ride.driver.vehicle.model}`
+      : 'ANGREN TAXI',
+    plate: ride.driver.vehicle?.plateNumber,
+    phone: ride.driver.user?.phone,
+    eta: '3 мин',
+    etaMinutes: 3,
+  };
 }
 
 function calculateDistanceMeters(

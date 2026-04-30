@@ -274,7 +274,7 @@ function createCoreFlowMock() {
       stopAmount: 1000,
     }),
     getDefaultTariff: () => ({
-      tariffClass: 'ECONOMY',
+      tariffClass: 'STANDARD',
       city: 'Angren',
       baseFare: 7000,
       perKm: 2000,

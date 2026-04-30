@@ -15,7 +15,7 @@ interface CustomerTariff {
 
 const tariffs: CustomerTariff[] = [
   {
-    id: 'ECONOMY',
+    id: 'STANDARD',
     titleKey: 'economy',
     baseFare: 7000,
     perKm: 2000,
@@ -35,7 +35,7 @@ const tariffs: CustomerTariff[] = [
     minimumFare: 16000,
   },
   {
-    id: 'PREMIUM',
+    id: 'COMFORT_PLUS',
     titleKey: 'premium',
     baseFare: 15000,
     perKm: 3500,
