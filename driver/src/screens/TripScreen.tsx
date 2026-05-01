@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { MapPlaceholder } from '../components/MapPlaceholder';
+import { DriverMapboxMap } from '../components/map';
 import { t } from '../i18n';
 import { ActiveTrip, Coords } from '../types/order';
 
@@ -12,32 +12,16 @@ interface TripScreenProps {
 
 export function TripScreen({ driverPosition, trip, onStart, onComplete }: TripScreenProps) {
   const isInProgress = trip.status === 'IN_PROGRESS';
-  const current = driverPosition ?? (isInProgress ? trip.dropoff : trip.pickup);
 
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
-        <MapPlaceholder
-          points={[
-            {
-              label: 'Driver',
-              lat: current.lat,
-              lng: current.lng,
-            },
-            {
-              label: 'Pickup',
-              lat: trip.pickup.lat,
-              lng: trip.pickup.lng,
-              address: trip.pickupAddress,
-            },
-            {
-              label: 'Dropoff',
-              lat: trip.dropoff.lat,
-              lng: trip.dropoff.lng,
-              address: trip.dropoffAddress,
-            },
-          ]}
-          subtitle={trip.dropoffAddress}
+        <DriverMapboxMap
+          destination={trip.dropoff}
+          driverPosition={driverPosition}
+          pickup={trip.pickup}
+          showToDestinationRoute
+          showToPickupRoute
         />
         <View style={styles.mapBadge}>
           <Text style={styles.mapTitle}>{isInProgress ? t('tripInProgress') : t('passengerNearby')}</Text>

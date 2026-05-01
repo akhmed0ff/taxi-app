@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { MapPlaceholder } from '../components/MapPlaceholder';
+import { DriverMapboxMap } from '../components/map';
 import { t } from '../i18n';
 import { ActiveTrip, Coords } from '../types/order';
 
@@ -12,26 +12,15 @@ interface NavigationScreenProps {
 }
 
 export function NavigationScreen({ driverPosition, onArrived, onCancel, trip }: NavigationScreenProps) {
-  const current = driverPosition ?? trip.pickup;
-
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
-        <MapPlaceholder
-          points={[
-            {
-              label: 'Driver',
-              lat: current.lat,
-              lng: current.lng,
-            },
-            {
-              label: 'Pickup',
-              lat: trip.pickup.lat,
-              lng: trip.pickup.lng,
-              address: trip.pickupAddress,
-            },
-          ]}
-          subtitle={trip.pickupAddress}
+        <DriverMapboxMap
+          destination={trip.dropoff}
+          driverPosition={driverPosition}
+          pickup={trip.pickup}
+          showToDestinationRoute
+          showToPickupRoute
         />
         <View style={styles.mapBadge}>
           <Feather color="#14532d" name="map-pin" size={22} />

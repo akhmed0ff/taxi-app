@@ -1,18 +1,19 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Alert,
   Easing,
   Linking,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import MapView, { Marker, Polyline, Region } from 'react-native-maps';
+import { PassengerMapboxMap } from '../components/map';
 import {
   AppButton,
   BottomSheetPanel,
@@ -21,9 +22,15 @@ import {
   QuickPlaceButton,
   TariffCard,
 } from '../components/ui';
-import { t } from '../i18n';
+import {
+  isNetworkError,
+  reverseGeocodePickup,
+  type DestinationSearchResult,
+  type RouteResponse,
+} from '../services/api';
 import { usePassengerRideState } from '../state/passengerRideState';
 import { Order, Point, TariffClass } from '../types/order';
+import { DestinationSearchScreen } from './DestinationSearchScreen';
 
 interface HomeScreenProps {
   order?: Order;
@@ -33,51 +40,82 @@ interface HomeScreenProps {
   onLogout: () => void;
 }
 
-const ANGREN_CENTER = {
-  latitude: 41.0167,
-  longitude: 70.1436,
-  latitudeDelta: 0.035,
-  longitudeDelta: 0.035,
+const ANGREN_FALLBACK: Point = {
+  lat: 41.0167,
+  lng: 70.1436,
+  address: 'Angren',
 };
 
-const TASHKENT_FALLBACK = {
-  lat: 41.2995,
-  lng: 69.2401,
-  address: 'Ташкент',
-};
+const quickPlaces: Array<{
+  icon: keyof typeof Ionicons.glyphMap;
+  id: 'home' | 'work' | 'saved';
+  label: string;
+  point: Point;
+}> = [
+  {
+    icon: 'home-outline',
+    id: 'home',
+    label: 'Р вЂќР С•Р С',
+    point: {
+      lat: 41.0224,
+      lng: 70.1542,
+      address: 'Р С’Р Р…Р С–РЎР‚Р ВµР Р…, 5-Р в„– Р СР С‘Р С”РЎР‚Р С•РЎР‚Р В°Р в„–Р С•Р Р…, Р Т‘Р С•Р С',
+    },
+  },
+  {
+    icon: 'briefcase-outline',
+    id: 'work',
+    label: 'Р В Р В°Р В±Р С•РЎвЂљР В°',
+    point: {
+      lat: 41.0289,
+      lng: 70.1684,
+      address: 'Р С’Р Р…Р С–РЎР‚Р ВµР Р…, Р С—РЎР‚Р С•Р СР В·Р С•Р Р…Р В°, РЎР‚Р В°Р В±Р С•РЎвЂљР В°',
+    },
+  },
+  {
+    icon: 'star-outline',
+    id: 'saved',
+    label: 'Р ВР В·Р В±РЎР‚Р В°Р Р…Р Р…Р С•Р Вµ',
+    point: {
+      lat: 41.0135,
+      lng: 70.1328,
+      address: 'Р С’Р Р…Р С–РЎР‚Р ВµР Р…, Р В»РЎР‹Р В±Р С‘Р СР С•Р Вµ Р СР ВµРЎРѓРЎвЂљР С•',
+    },
+  },
+];
 
 const tariffs = [
   {
-    eta: '3 мин',
+    eta: '3 min',
     icon: 'car-outline',
     id: 'standard',
-    price: '3 800 сум',
+    price: '3 800 sum',
     tariffClass: 'STANDARD',
-    title: 'Стандарт',
+    title: 'Standard',
   },
   {
-    eta: '5 мин',
+    eta: '5 min',
     icon: 'car-sport-outline',
     id: 'comfort',
-    price: '5 000 сум',
+    price: '5 000 sum',
     tariffClass: 'COMFORT',
-    title: 'Комфорт',
+    title: 'Comfort',
   },
   {
-    eta: '7 мин',
+    eta: '7 min',
     icon: 'car-sport-outline',
     id: 'comfort-plus',
-    price: '6 500 сум',
+    price: '6 500 sum',
     tariffClass: 'COMFORT_PLUS',
-    title: 'Комфорт+',
+    title: 'Comfort+',
   },
   {
-    eta: '10 мин',
+    eta: '10 min',
     icon: 'cube-outline',
     id: 'delivery',
-    price: '8 800 сум',
+    price: '8 800 sum',
     tariffClass: 'DELIVERY',
-    title: 'Доставка',
+    title: 'Delivery',
   },
 ] as const satisfies ReadonlyArray<{
   eta: string;
@@ -88,23 +126,82 @@ const tariffs = [
   title: string;
 }>;
 
-const mockDriver = {
-  driverName: 'Алишер',
-  rating: 4.9,
-  car: 'Chevrolet Cobalt',
-  plate: '01 A 777 AA',
-  eta: '3 мин',
+const tariffPricing: Record<
+  TariffClass,
+  { baseFare: number; minimumFare: number; perKm: number }
+> = {
+  STANDARD: {
+    baseFare: 3800,
+    minimumFare: 3800,
+    perKm: 2000,
+  },
+  COMFORT: {
+    baseFare: 10000,
+    minimumFare: 16000,
+    perKm: 2500,
+  },
+  COMFORT_PLUS: {
+    baseFare: 6500,
+    minimumFare: 6500,
+    perKm: 3500,
+  },
+  DELIVERY: {
+    baseFare: 8800,
+    minimumFare: 8800,
+    perKm: 3500,
+  },
 };
+
+const mockDriver = {
+  car: 'Chevrolet Cobalt',
+  driverName: 'Alisher',
+  eta: '3 min',
+  plate: '01 A 777 AA',
+  rating: 4.9,
+};
+
+function calculateTariffFare(tariffClass: TariffClass, distanceMeters: number) {
+  const pricing = tariffPricing[tariffClass];
+  const distanceKm = distanceMeters / 1000;
+  const rawFare = pricing.baseFare + Math.round(distanceKm * pricing.perKm);
+
+  return Math.max(rawFare, pricing.minimumFare);
+}
+
+function formatUzs(value: number) {
+  return `${Math.round(value).toLocaleString('ru-RU').replace(/\u00a0/g, ' ')} РЎРѓРЎС“Р С`;
+}
+
+function formatDistance(distanceMeters: number) {
+  return `${(distanceMeters / 1000).toFixed(1).replace('.', ',')} Р С”Р С`;
+}
+
+function formatDuration(durationSeconds: number) {
+  const totalMinutes = Math.max(1, Math.round(durationSeconds / 60));
+
+  if (totalMinutes < 60) {
+    return `${totalMinutes} Р СР С‘Р Р…`;
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes > 0 ? `${hours} РЎвЂЎ ${minutes} Р СР С‘Р Р…` : `${hours} РЎвЂЎ`;
+}
 
 export function HomeScreen({
   onCancelOrder,
-  onOrderRequested,
   onOpenHistory,
+  onOrderRequested,
   order,
 }: HomeScreenProps) {
-  const [pickupAddress, setPickupAddress] = useState<string>(t('currentLocation'));
-  const [dropoffAddress, setDropoffAddress] = useState('');
+  const [pickupAddress, setPickupAddress] = useState('Р С›Р С—РЎР‚Р ВµР Т‘Р ВµР В»РЎРЏР ВµР С Р В°Р Т‘РЎР‚Р ВµРЎРѓ...');
+  const [isPickupAddressLoading, setIsPickupAddressLoading] = useState(true);
+  const [destination, setDestination] = useState<Point>();
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [isDestinationSearchOpen, setIsDestinationSearchOpen] = useState(false);
+  const [isRouteLoading, setIsRouteLoading] = useState(false);
+  const [routeErrorMessage, setRouteErrorMessage] = useState<string>();
+  const [route, setRoute] = useState<RouteResponse | null>(null);
   const {
     markDriverAssigned,
     markOrderCreated,
@@ -115,26 +212,7 @@ export function HomeScreen({
     state: rideState,
   } = usePassengerRideState();
   const pulseAnim = useRef(new Animated.Value(0)).current;
-  const [currentPoint, setCurrentPoint] = useState<Point>({
-    ...TASHKENT_FALLBACK,
-  });
-
-  const mapRegion = useMemo(
-    () => ({
-      latitude: currentPoint.lat,
-      longitude: currentPoint.lng,
-      latitudeDelta: ANGREN_CENTER.latitudeDelta,
-      longitudeDelta: ANGREN_CENTER.longitudeDelta,
-    }),
-    [currentPoint.lat, currentPoint.lng],
-  );
-
-  const dropoffPoint: Point = {
-    lat: currentPoint.lat + 0.035,
-    lng: currentPoint.lng + 0.035,
-    address: dropoffAddress,
-  };
-  const hasDestination = dropoffAddress.trim().length > 0;
+  const [currentPoint, setCurrentPoint] = useState<Point>(ANGREN_FALLBACK);
 
   const selectedTariffDetails =
     tariffs.find((tariff) => tariff.tariffClass === rideState.selectedTariff) ??
@@ -145,7 +223,21 @@ export function HomeScreen({
   const isRideCompleted = rideState.status === 'COMPLETED';
   const driver = rideState.driver ?? order?.driver;
   const orderId = rideState.orderId;
-  const driverEta = driver?.eta ?? (driver?.etaMinutes ? `${driver.etaMinutes} мин` : mockDriver.eta);
+  const destinationAddress = destination?.address ?? '';
+  const hasDestination = Boolean(destinationAddress);
+  const hasPickup = Boolean(pickupAddress.trim()) && !isPickupAddressLoading;
+  const routeReady = Boolean(route?.distance && route?.duration);
+  const routeSummary = routeErrorMessage
+    ? routeErrorMessage
+    : routeReady && route
+      ? `${formatDistance(route.distance)} | ${formatDuration(route.duration)}`
+      : isRouteLoading
+        ? 'Считаем маршрут...'
+        : 'Nearby drivers around Angren';
+  const canCreateOrder =
+    hasPickup && hasDestination && !isCreatingOrder && !isSearchingDriver && !orderId;
+  const driverEta =
+    driver?.eta ?? (driver?.etaMinutes ? `${driver.etaMinutes} min` : mockDriver.eta);
 
   const pulseStyle = {
     opacity: pulseAnim.interpolate({
@@ -165,6 +257,53 @@ export function HomeScreen({
   useEffect(() => {
     void updateCurrentLocation();
   }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    setIsPickupAddressLoading(true);
+    setPickupAddress('Р С›Р С—РЎР‚Р ВµР Т‘Р ВµР В»РЎРЏР ВµР С Р В°Р Т‘РЎР‚Р ВµРЎРѓ...');
+
+    const timer = setTimeout(() => {
+      void reverseGeocodePickup({
+        lat: currentPoint.lat,
+        lng: currentPoint.lng,
+      })
+        .then((result) => {
+          if (!isActive) {
+            return;
+          }
+
+          const nextAddress = result.fullAddress.trim() || 'Р С’Р Т‘РЎР‚Р ВµРЎРѓ Р Р…Р Вµ Р Р…Р В°Р в„–Р Т‘Р ВµР Р…';
+          setPickupAddress(nextAddress);
+          setCurrentPoint((point) => ({
+            ...point,
+            address: nextAddress,
+          }));
+        })
+        .catch((error) => {
+          if (!isActive) {
+            return;
+          }
+
+          console.warn(error);
+          const fallbackAddress = isNetworkError(error)
+            ? 'Р СњР ВµРЎвЂљ Р С‘Р Р…РЎвЂљР ВµРЎР‚Р Р…Р ВµРЎвЂљР В°. Р СњР Вµ РЎС“Р Т‘Р В°Р В»Р С•РЎРѓРЎРЉ Р С•Р С—РЎР‚Р ВµР Т‘Р ВµР В»Р С‘РЎвЂљРЎРЉ Р В°Р Т‘РЎР‚Р ВµРЎРѓ.'
+            : currentPoint.address?.trim() || 'Р С’Р Т‘РЎР‚Р ВµРЎРѓ Р Р…Р Вµ Р Р…Р В°Р в„–Р Т‘Р ВµР Р…';
+          setPickupAddress(fallbackAddress);
+        })
+        .finally(() => {
+          if (isActive) {
+            setIsPickupAddressLoading(false);
+          }
+        });
+    }, 850);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timer);
+    };
+  }, [currentPoint.lat, currentPoint.lng]);
 
   useEffect(() => {
     if (!isSearchingDriver) {
@@ -215,7 +354,7 @@ export function HomeScreen({
   ]);
 
   async function handleOrder() {
-    if (!dropoffAddress || isCreatingOrder || orderId) {
+    if (!destination || isCreatingOrder || orderId) {
       return;
     }
 
@@ -223,17 +362,32 @@ export function HomeScreen({
     try {
       const createdOrder = await onOrderRequested(
         { ...currentPoint, address: pickupAddress },
-        dropoffPoint,
+        destination,
         selectedTariffDetails.tariffClass,
       );
       markOrderCreated(createdOrder.id, selectedTariffDetails.tariffClass);
     } catch (error) {
       console.warn(error);
-      Alert.alert('Ошибка создания заказа');
+      Alert.alert('Р СњР Вµ РЎС“Р Т‘Р В°Р В»Р С•РЎРѓРЎРЉ РЎРѓР С•Р В·Р Т‘Р В°РЎвЂљРЎРЉ Р В·Р В°Р С”Р В°Р В·');
       resetRide();
     } finally {
       setIsCreatingOrder(false);
     }
+  }
+
+  function handleOrderPress() {
+    if (isPickupAddressLoading) {
+      Alert.alert('Подождите, определяем адрес');
+      return;
+    }
+
+    if (!hasDestination) {
+      setIsDestinationSearchOpen(true);
+      return;
+    }
+
+
+    void handleOrder();
   }
 
   async function updateCurrentLocation() {
@@ -241,8 +395,7 @@ export function HomeScreen({
       const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status !== 'granted') {
-        setCurrentPoint(TASHKENT_FALLBACK);
-        setPickupAddress(TASHKENT_FALLBACK.address);
+        setCurrentPoint(ANGREN_FALLBACK);
         return;
       }
 
@@ -250,35 +403,63 @@ export function HomeScreen({
       const nextPoint = {
         lat: location.coords.latitude,
         lng: location.coords.longitude,
-        address: t('currentLocation'),
+        address: ANGREN_FALLBACK.address,
       };
 
       setCurrentPoint(nextPoint);
-      setPickupAddress(nextPoint.address);
     } catch (error) {
       console.warn(error);
-      setCurrentPoint(TASHKENT_FALLBACK);
-      setPickupAddress(TASHKENT_FALLBACK.address);
+      setCurrentPoint(ANGREN_FALLBACK);
     }
   }
 
-  function handleMapRegionChangeComplete(region: Region) {
+  function handlePickupChange({ pickupLat, pickupLng }: { pickupLat: number; pickupLng: number }) {
     setCurrentPoint((point) => ({
       ...point,
-      lat: region.latitude,
-      lng: region.longitude,
+      lat: pickupLat,
+      lng: pickupLng,
       address: pickupAddress,
     }));
   }
 
+  function handleDestinationSelected(result: DestinationSearchResult) {
+    setDestination({
+      lat: result.lat,
+      lng: result.lng,
+      address: result.fullAddress,
+    });
+    setIsDestinationSearchOpen(false);
+  }
+
+  function handleQuickPlaceSelect(point: Point) {
+    setDestination(point);
+    setIsDestinationSearchOpen(false);
+  }
+
+  function getTariffPrice(tariff: (typeof tariffs)[number]) {
+    if (!hasDestination) {
+      return `РѕС‚ ${formatUzs(tariffPricing[tariff.tariffClass].minimumFare)}`;
+    }
+
+    if (isRouteLoading) {
+      return 'СѓС‚РѕС‡РЅСЏРµС‚СЃСЏ';
+    }
+
+    if (!route?.distance) {
+      return 'СѓС‚РѕС‡РЅСЏРµС‚СЃСЏ';
+    }
+
+    return formatUzs(calculateTariffFare(tariff.tariffClass, route.distance));
+  }
+
   function handleCancelRideState() {
-    Alert.alert('Отменить поездку?', undefined, [
+    Alert.alert('Cancel ride?', undefined, [
       {
-        text: 'Нет',
+        text: 'No',
         style: 'cancel',
       },
       {
-        text: 'Отменить',
+        text: 'Cancel',
         style: 'destructive',
         onPress: () => {
           void cancelRide();
@@ -293,7 +474,7 @@ export function HomeScreen({
       resetRide();
     } catch (error) {
       console.warn(error);
-      Alert.alert('Не удалось отменить заказ');
+      Alert.alert('Could not cancel the order');
     }
   }
 
@@ -302,52 +483,29 @@ export function HomeScreen({
   }
 
   function handleMessageDriver() {
-    Alert.alert('Сообщения скоро будут доступны');
+    Alert.alert('Messages will be available soon');
   }
 
   return (
     <View style={styles.screen}>
-      <MapView
-        initialRegion={ANGREN_CENTER}
-        onRegionChangeComplete={handleMapRegionChangeComplete}
-        region={mapRegion}
-        showsCompass={false}
-        showsMyLocationButton={false}
-        showsUserLocation
-        style={StyleSheet.absoluteFill}
-      >
-        {hasDestination ? (
-          <>
-            <Polyline
-              coordinates={[
-                {
-                  latitude: currentPoint.lat,
-                  longitude: currentPoint.lng,
-                },
-                {
-                  latitude: dropoffPoint.lat,
-                  longitude: dropoffPoint.lng,
-                },
-              ]}
-              strokeColor="#111111"
-              strokeWidth={5}
-            />
-            <Marker
-              coordinate={{
-                latitude: dropoffPoint.lat,
-                longitude: dropoffPoint.lng,
-              }}
-              title="Куда"
-              description={dropoffAddress}
-            />
-          </>
-        ) : null}
-      </MapView>
+      <PassengerMapboxMap
+        destinationLat={destination?.lat}
+        destinationLng={destination?.lng}
+        initialPickupLat={currentPoint.lat}
+        initialPickupLng={currentPoint.lng}
+        onPickupChange={handlePickupChange}
+        onRouteChange={setRoute}
+        onRouteErrorChange={setRouteErrorMessage}
+        onRouteLoadingChange={setIsRouteLoading}
+        showDestinationMarker={hasDestination}
+        showLocationButton={false}
+        showPickupPin={false}
+      />
 
       <View pointerEvents="none" style={styles.centerPinWrap}>
         <View style={styles.etaBubble}>
           <Text style={styles.etaTime}>{isDriverFound ? driverEta : selectedTariffDetails.eta}</Text>
-          <Text style={styles.etaLabel}>Подача</Text>
+          <Text style={styles.etaLabel}>Pickup</Text>
         </View>
         {isSearchingDriver ? (
           <Animated.View style={[styles.pinPulse, pulseStyle]} />
@@ -369,12 +527,12 @@ export function HomeScreen({
       <View style={styles.topLayer}>
         <View style={styles.topButtons}>
           <IconButton
-            accessibilityLabel="Профиль"
+            accessibilityLabel="History"
             icon={<Ionicons color="#111111" name="person-outline" size={22} />}
             onPress={onOpenHistory}
           />
           <IconButton
-            accessibilityLabel="Параметры"
+            accessibilityLabel="Options"
             icon={<Ionicons color="#111111" name="options-outline" size={22} />}
           />
         </View>
@@ -383,13 +541,13 @@ export function HomeScreen({
           <View style={styles.addressRow}>
             <View style={styles.routeDot} />
             <View style={styles.addressContent}>
-              <Text style={styles.fieldLabel}>Откуда</Text>
+              <Text style={styles.fieldLabel}>From</Text>
               <TextInput
-                onChangeText={setPickupAddress}
-                placeholder="Текущее местоположение"
+                editable={false}
+                placeholder="Current location"
                 placeholderTextColor="#98A2B3"
                 style={styles.addressInput}
-                value={pickupAddress}
+                value={isPickupAddressLoading ? 'Р С›Р С—РЎР‚Р ВµР Т‘Р ВµР В»РЎРЏР ВµР С Р В°Р Т‘РЎР‚Р ВµРЎРѓ...' : pickupAddress}
               />
             </View>
           </View>
@@ -399,42 +557,50 @@ export function HomeScreen({
           <View style={styles.addressRow}>
             <View style={[styles.routeDot, styles.routeDotDestination]} />
             <View style={styles.addressContent}>
-              <Text style={styles.fieldLabel}>Куда</Text>
-              <TextInput
-                onChangeText={setDropoffAddress}
-                placeholder="Куда поедем?"
-                placeholderTextColor="#98A2B3"
-                style={styles.addressInput}
-                value={dropoffAddress}
-              />
+              <Text style={styles.fieldLabel}>To</Text>
+              <Pressable
+                onPress={() => setIsDestinationSearchOpen(true)}
+                style={styles.destinationFieldButton}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.addressInput,
+                    !destinationAddress && styles.addressPlaceholder,
+                  ]}
+                >
+                  {destinationAddress || 'Р С™РЎС“Р Т‘Р В° Р С—Р С•Р ВµР Т‘Р ВµР С?'}
+                </Text>
+              </Pressable>
             </View>
           </View>
 
           <View style={styles.quickPlaces}>
-            <QuickPlaceButton
-              icon={<Ionicons color="#111111" name="home-outline" size={16} />}
-              label="Дом"
-            />
-            <QuickPlaceButton
-              icon={<Ionicons color="#111111" name="briefcase-outline" size={16} />}
-              label="Работа"
-            />
-            <QuickPlaceButton
-              icon={<Ionicons color="#111111" name="star-outline" size={16} />}
-              label="Избранное"
-            />
+            {quickPlaces.map((place) => (
+              <QuickPlaceButton
+                icon={<Ionicons color="#111111" name={place.icon} size={16} />}
+                key={place.id}
+                label={place.label}
+                onPress={() => handleQuickPlaceSelect(place.point)}
+                style={
+                  destination?.address === place.point.address
+                    ? styles.quickPlaceSelected
+                    : undefined
+                }
+              />
+            ))}
           </View>
         </GlassCard>
       </View>
 
       <View style={styles.mapActions}>
         <IconButton
-          accessibilityLabel="Безопасность"
+          accessibilityLabel="Safety"
           icon={<Ionicons color="#111111" name="shield-checkmark-outline" size={23} />}
           variant="yellow"
         />
         <IconButton
-          accessibilityLabel="Моя геолокация"
+          accessibilityLabel="My location"
           icon={<MaterialCommunityIcons color="#111111" name="crosshairs-gps" size={24} />}
           onPress={updateCurrentLocation}
         />
@@ -443,10 +609,10 @@ export function HomeScreen({
       <BottomSheetPanel style={styles.sheet}>
         <View style={styles.sheetHeader}>
           <View>
-            <Text style={styles.sheetTitle}>Выберите тариф</Text>
-            <Text style={styles.sheetSubtitle}>Ближайшие машины рядом</Text>
+            <Text style={styles.sheetTitle}>Choose a tariff</Text>
+            <Text style={styles.sheetSubtitle}>{hasDestination ? routeSummary : 'Nearby drivers around Angren'}</Text>
           </View>
-          <Text style={styles.sheetBadge}>#FFD400</Text>
+          <Text style={styles.sheetBadge}>ANGREN</Text>
         </View>
 
         {isRideStarted || isRideCompleted ? (
@@ -461,10 +627,10 @@ export function HomeScreen({
               </View>
               <View style={styles.searchText}>
                 <Text style={styles.searchTitle}>
-                  {isRideCompleted ? 'Поездка завершена' : 'Поездка началась'}
+                  {isRideCompleted ? 'Trip completed' : 'Trip started'}
                 </Text>
                 <Text style={styles.searchSubtitle}>
-                  {orderId ? `Заказ #${orderId.slice(0, 8)}` : selectedTariffDetails.title}
+                  {orderId ? `Order #${orderId.slice(0, 8)}` : selectedTariffDetails.title}
                 </Text>
               </View>
             </View>
@@ -477,7 +643,7 @@ export function HomeScreen({
               </View>
               <View style={styles.driverInfo}>
                 <View style={styles.driverNameRow}>
-                <Text style={styles.driverName}>{driver?.name ?? mockDriver.driverName}</Text>
+                  <Text style={styles.driverName}>{driver?.name ?? mockDriver.driverName}</Text>
                   <View style={styles.ratingBadge}>
                     <Ionicons color="#111111" name="star" size={13} />
                     <Text style={styles.ratingText}>{driver?.rating ?? mockDriver.rating}</Text>
@@ -488,7 +654,7 @@ export function HomeScreen({
               </View>
               <View style={styles.driverEta}>
                 <Text style={styles.driverEtaValue}>{driverEta}</Text>
-                <Text style={styles.driverEtaLabel}>Подача</Text>
+                <Text style={styles.driverEtaLabel}>Pickup</Text>
               </View>
             </View>
 
@@ -498,7 +664,7 @@ export function HomeScreen({
                 onPress={handleCallDriver}
                 size="md"
                 style={styles.driverActionButton}
-                title="Позвонить"
+                title="Call"
                 variant="yellow"
               />
               <AppButton
@@ -506,7 +672,7 @@ export function HomeScreen({
                 onPress={handleMessageDriver}
                 size="md"
                 style={styles.driverActionButton}
-                title="Написать"
+                title="Message"
                 variant="outline"
               />
             </View>
@@ -518,13 +684,11 @@ export function HomeScreen({
                 <Ionicons color="#111111" name="radio-outline" size={24} />
               </View>
               <View style={styles.searchText}>
-                <Text style={styles.searchTitle}>Ищем ближайшего водителя</Text>
+                <Text style={styles.searchTitle}>Searching for a nearby driver</Text>
                 <Text style={styles.searchSubtitle}>
-                  {selectedTariffDetails.title} · {selectedTariffDetails.eta} · {selectedTariffDetails.price}
+                  {selectedTariffDetails.title} | {selectedTariffDetails.eta} | {getTariffPrice(selectedTariffDetails)}
                 </Text>
-                {orderId ? (
-                  <Text style={styles.orderIdText}>Заказ #{orderId.slice(0, 8)}</Text>
-                ) : null}
+                {orderId ? <Text style={styles.orderIdText}>Order #{orderId.slice(0, 8)}</Text> : null}
               </View>
             </View>
           </GlassCard>
@@ -539,7 +703,7 @@ export function HomeScreen({
                 description={tariff.eta}
                 icon={<Ionicons color="#111111" name={tariff.icon} size={26} />}
                 key={tariff.id}
-                price={tariff.price}
+                price={getTariffPrice(tariff)}
                 onPress={() => selectTariff(tariff.tariffClass)}
                 selected={rideState.selectedTariff === tariff.tariffClass}
                 style={styles.tariffCard}
@@ -551,11 +715,25 @@ export function HomeScreen({
 
         {!isDriverFound && !isRideStarted && !isRideCompleted ? (
           <AppButton
-            disabled={!dropoffAddress || isCreatingOrder || isSearchingDriver || Boolean(orderId)}
+            disabled={isCreatingOrder || isSearchingDriver || Boolean(orderId)}
             loading={isCreatingOrder}
-            onPress={handleOrder}
-            style={styles.orderButton}
-            title={isSearchingDriver || isCreatingOrder ? 'Ищем водителя...' : 'Заказать'}
+            onPress={handleOrderPress}
+            style={[styles.orderButton, !canCreateOrder && styles.orderButtonDisabled]}
+            title={
+              isSearchingDriver || isCreatingOrder
+                ? 'Searching...'
+                  : !hasPickup
+                  ? 'Подождите, определяем адрес'
+                  : !hasDestination
+                    ? 'Куда поедем?'
+                    : isRouteLoading
+                      ? 'Считаем маршрут...'
+                      : routeErrorMessage
+                        ? 'Цена уточняется'
+                        : !routeReady
+                          ? 'Считаем маршрут...'
+                      : 'Order'
+            }
           />
         ) : null}
         {isSearchingDriver || isDriverFound ? (
@@ -563,11 +741,21 @@ export function HomeScreen({
             onPress={handleCancelRideState}
             size="md"
             style={styles.cancelButton}
-            title="Отменить"
+            title="Cancel"
             variant="outline"
           />
         ) : null}
       </BottomSheetPanel>
+
+      {isDestinationSearchOpen ? (
+        <View style={styles.searchOverlay}>
+          <DestinationSearchScreen
+            initialQuery={destinationAddress}
+            onBack={() => setIsDestinationSearchOpen(false)}
+            onSelect={handleDestinationSelected}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -611,6 +799,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
   },
+  addressPlaceholder: {
+    color: '#98A2B3',
+  },
+  destinationFieldButton: {
+    minHeight: 34,
+    justifyContent: 'center',
+  },
   routeDot: {
     width: 14,
     height: 14,
@@ -633,6 +828,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginTop: 16,
+  },
+  quickPlaceSelected: {
+    borderColor: 'rgba(255,212,0,0.95)',
+    backgroundColor: 'rgba(255,255,255,0.72)',
   },
   centerPinWrap: {
     position: 'absolute',
@@ -902,8 +1101,16 @@ const styles = StyleSheet.create({
   orderButton: {
     marginTop: 16,
   },
+  orderButtonDisabled: {
+    opacity: 0.72,
+  },
   cancelButton: {
     marginTop: 10,
     shadowOpacity: 0.04,
   },
+  searchOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+  },
 });
+

@@ -22,6 +22,44 @@ const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').rep
 
 export type CustomerSession = CustomerDevSession;
 
+export interface RouteGeometry {
+  coordinates: [number, number][];
+  type: 'LineString';
+}
+
+export interface RouteResponse {
+  distance: number;
+  duration: number;
+  geometry: RouteGeometry;
+}
+
+export interface DestinationSearchResult {
+  title: string;
+  subtitle: string;
+  lat: number;
+  lng: number;
+  fullAddress: string;
+}
+
+export interface ReverseGeocodeResult {
+  title: string;
+  subtitle: string;
+  fullAddress: string;
+}
+
+export function isNetworkError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes('network request failed') ||
+    message.includes('fetch failed') ||
+    message.includes('failed to fetch')
+  );
+}
+
 interface AuthResponse {
   accessToken: string;
   refreshToken: string;
@@ -151,6 +189,57 @@ export async function cancelOrder(
   }
 
   return response.json();
+}
+
+export async function fetchRoute(input: {
+  destinationLat: number;
+  destinationLng: number;
+  pickupLat: number;
+  pickupLng: number;
+}): Promise<RouteResponse> {
+  const params = new URLSearchParams({
+    destinationLat: String(input.destinationLat),
+    destinationLng: String(input.destinationLng),
+    pickupLat: String(input.pickupLat),
+    pickupLng: String(input.pickupLng),
+  });
+  const response = await fetch(`${API_URL}/maps/route?${params.toString()}`);
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to fetch route'));
+  }
+
+  return response.json() as Promise<RouteResponse>;
+}
+
+export async function searchDestinationAddresses(
+  query: string,
+): Promise<DestinationSearchResult[]> {
+  const params = new URLSearchParams({ q: query });
+  const response = await fetch(`${API_URL}/maps/search?${params.toString()}`);
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to search destination'));
+  }
+
+  return response.json() as Promise<DestinationSearchResult[]>;
+}
+
+export async function reverseGeocodePickup(input: {
+  lat: number;
+  lng: number;
+}): Promise<ReverseGeocodeResult> {
+  const params = new URLSearchParams({
+    lat: String(input.lat),
+    lng: String(input.lng),
+  });
+  const response = await fetch(`${API_URL}/maps/reverse?${params.toString()}`);
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to reverse geocode pickup'));
+  }
+
+  return response.json() as Promise<ReverseGeocodeResult>;
 }
 
 export async function fetchPassengerRideHistory(

@@ -18,6 +18,24 @@ const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').rep
 );
 export type DriverSession = DriverDevSession;
 
+export interface RouteGeometry {
+  coordinates: [number, number][];
+  type: 'LineString';
+}
+
+export interface RouteResponse {
+  distance: number;
+  duration: number;
+  geometry: RouteGeometry;
+}
+
+interface FetchRouteParams {
+  destinationLat: number;
+  destinationLng: number;
+  pickupLat: number;
+  pickupLng: number;
+}
+
 interface AuthResponse {
   accessToken: string;
   refreshToken: string;
@@ -35,6 +53,27 @@ export async function loginDriver(phone = process.env.EXPO_PUBLIC_DRIVER_PHONE ?
 
 export async function ensureDriverDevSession(): Promise<DriverSession> {
   return getDriverDevSession();
+}
+
+export async function fetchRoute({
+  destinationLat,
+  destinationLng,
+  pickupLat,
+  pickupLng,
+}: FetchRouteParams): Promise<RouteResponse> {
+  const query = new URLSearchParams({
+    destinationLat: String(destinationLat),
+    destinationLng: String(destinationLng),
+    pickupLat: String(pickupLat),
+    pickupLng: String(pickupLng),
+  });
+  const response = await fetch(`${API_URL}/maps/route?${query.toString()}`);
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to load route'));
+  }
+
+  return response.json();
 }
 
 export async function refreshDriverSession(
