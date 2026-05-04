@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert';
 import { BadRequestException } from '@nestjs/common';
 import { UserRoleValue } from '../../common/roles';
 import { DriverStatusValue } from '../driver/driver-status';
+import { RideOfferStatusValue } from '../matching/ride-offer-status';
 import { OrderService } from './order.service';
 import { OrderStatusValue } from './order-status';
 
@@ -15,6 +16,14 @@ interface RideState {
   customerId: string;
   driverId: string | null;
   status: string;
+}
+
+interface RideOfferState {
+  rideId: string;
+  driverId: string;
+  status: string;
+  expiresAt: Date;
+  acceptedAt?: Date | null;
 }
 
 function createPrismaMock() {
@@ -35,7 +44,30 @@ function createPrismaMock() {
         },
       ],
     ]),
+    rideOffers: new Map<string, RideOfferState>([
+      [
+        'ride-1:driver-1',
+        {
+          rideId: 'ride-1',
+          driverId: 'driver-1',
+          status: RideOfferStatusValue.SENT,
+          expiresAt: new Date(Date.now() + 60_000),
+          acceptedAt: null,
+        },
+      ],
+      [
+        'ride-1:driver-2',
+        {
+          rideId: 'ride-1',
+          driverId: 'driver-2',
+          status: RideOfferStatusValue.SENT,
+          expiresAt: new Date(Date.now() + 60_000),
+          acceptedAt: null,
+        },
+      ],
+    ]),
     statusHistory: [] as Array<{ rideId: string; status: string }>,
+    redisCleanups: [] as string[],
   };
 
   const makeTx = (txState: typeof state) => ({
@@ -81,6 +113,53 @@ function createPrismaMock() {
         return data;
       },
     },
+    rideOffer: {
+      findUnique: async ({
+        where,
+      }: {
+        where: { rideId_driverId: { rideId: string; driverId: string } };
+      }) =>
+        txState.rideOffers.get(
+          `${where.rideId_driverId.rideId}:${where.rideId_driverId.driverId}`,
+        ) ?? null,
+      update: async ({
+        where,
+        data,
+      }: {
+        where: { rideId_driverId: { rideId: string; driverId: string } };
+        data: { status: string; acceptedAt?: Date };
+      }) => {
+        const key = `${where.rideId_driverId.rideId}:${where.rideId_driverId.driverId}`;
+        const offer = txState.rideOffers.get(key);
+
+        assert.ok(offer, 'ride offer must exist before update');
+        const nextOffer = { ...offer, ...data };
+        txState.rideOffers.set(key, nextOffer);
+        return nextOffer;
+      },
+      updateMany: async ({
+        where,
+        data,
+      }: {
+        where: { rideId: string; driverId: { not: string }; status: { in: string[] } };
+        data: { status: string };
+      }) => {
+        let count = 0;
+
+        for (const [key, offer] of txState.rideOffers.entries()) {
+          if (
+            offer.rideId === where.rideId &&
+            offer.driverId !== where.driverId.not &&
+            where.status.in.includes(offer.status)
+          ) {
+            txState.rideOffers.set(key, { ...offer, ...data });
+            count += 1;
+          }
+        }
+
+        return { count };
+      },
+    },
   });
 
   return {
@@ -99,13 +178,17 @@ function createPrismaMock() {
           const txState = {
             drivers: new Map(state.drivers),
             rides: new Map(state.rides),
+            rideOffers: new Map(state.rideOffers),
             statusHistory: [...state.statusHistory],
+            redisCleanups: [...state.redisCleanups],
           };
           const result = await callback(makeTx(txState));
 
           state.drivers = txState.drivers;
           state.rides = txState.rides;
+          state.rideOffers = txState.rideOffers;
           state.statusHistory = txState.statusHistory;
+          state.redisCleanups = txState.redisCleanups;
 
           return result;
         } finally {
@@ -131,6 +214,10 @@ async function main() {
 
         rideLocked = true;
         return true;
+      },
+      cleanupOffersForRide: async (rideId: string) => {
+        state.redisCleanups.push(rideId);
+        return { rideId, deleted: 2 };
       },
     } as never,
     {
@@ -168,6 +255,15 @@ async function main() {
   assert.equal(onlineDrivers.length, 1);
   assert.equal(busyDrivers[0].id, ride?.driverId);
   assert.equal(state.statusHistory.length, 1);
+  assert.equal(
+    state.rideOffers.get(`ride-1:${ride?.driverId}`)?.status,
+    RideOfferStatusValue.ACCEPTED,
+  );
+  const expiredOffer = [...state.rideOffers.values()].find(
+    (offer) => offer.driverId !== ride?.driverId,
+  );
+  assert.equal(expiredOffer?.status, RideOfferStatusValue.EXPIRED);
+  assert.deepEqual(state.redisCleanups, ['ride-1']);
 
   const rejectedReason =
     rejected[0].status === 'rejected' ? rejected[0].reason : undefined;

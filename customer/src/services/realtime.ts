@@ -116,6 +116,12 @@ export class RealtimeClient {
       });
     };
 
+    this.socket.on('ride.driver_assigned', handleRideEvent);
+    this.socket.on('ride.driver_arrived', handleRideEvent);
+    this.socket.on('ride.started', handleRideEvent);
+    this.socket.on('ride.completed', handleRideEvent);
+    this.socket.on('ride.matching_failed', handleRideEvent);
+    this.socket.on('ride.cancelled', handleRideEvent);
     this.socket.on('DRIVER_ACCEPTED', handleRideEvent);
     this.socket.on('DRIVER_ASSIGNED', handleRideEvent);
     const handleDriverAssigned = (payload: BackendOrderEvent) =>
@@ -144,6 +150,12 @@ export class RealtimeClient {
 
     return () => {
       this.socket?.off('DRIVER_ACCEPTED', handleRideEvent);
+      this.socket?.off('ride.driver_assigned', handleRideEvent);
+      this.socket?.off('ride.driver_arrived', handleRideEvent);
+      this.socket?.off('ride.started', handleRideEvent);
+      this.socket?.off('ride.completed', handleRideEvent);
+      this.socket?.off('ride.matching_failed', handleRideEvent);
+      this.socket?.off('ride.cancelled', handleRideEvent);
       this.socket?.off('DRIVER_ASSIGNED', handleRideEvent);
       this.socket?.off('driver_assigned', handleDriverAssigned);
       this.socket?.off('DRIVER_ARRIVED', handleRideEvent);

@@ -9,7 +9,9 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { RealtimeEvent } from '../../common/realtime-events';
 import { UserRole, UserRoleValue } from '../../common/roles';
+import { RideOfferStatusValue } from '../../modules/matching/ride-offer-status';
 import { PrismaService } from '../db/prisma.service';
 import { RedisService } from '../redis/redis.service';
 
@@ -26,6 +28,12 @@ interface AuthenticatedSocketData {
 }
 
 type AuthenticatedSocket = Socket & { data: AuthenticatedSocketData };
+
+const ACTIVE_RIDE_OFFER_STATUSES: string[] = [
+  RideOfferStatusValue.PENDING,
+  RideOfferStatusValue.SENT,
+  RideOfferStatusValue.ACKED,
+];
 
 @WebSocketGateway({
   cors: {
@@ -167,6 +175,34 @@ export class SocketGateway implements OnGatewayConnection {
       return { ok: false };
     }
 
+    const offer = await this.prisma.rideOffer.findUnique({
+      where: {
+        rideId_driverId: {
+          rideId,
+          driverId,
+        },
+      },
+    });
+
+    if (!offer) {
+      return { ok: false };
+    }
+
+    if (ACTIVE_RIDE_OFFER_STATUSES.includes(offer.status)) {
+      await this.prisma.rideOffer.update({
+        where: {
+          rideId_driverId: {
+            rideId,
+            driverId,
+          },
+        },
+        data: {
+          status: RideOfferStatusValue.REJECTED,
+          rejectedAt: new Date(),
+        },
+      });
+    }
+
     await this.redis?.rejectRideOffer(rideId, driverId);
     return { ok: true };
   }
@@ -177,6 +213,25 @@ export class SocketGateway implements OnGatewayConnection {
 
   emitToDriver(driverId: string, event: string, payload: unknown) {
     this.server.to(`driver:${driverId}`).emit(event, payload);
+  }
+
+  async emitOfferToDriverWithAck(
+    driverId: string,
+    payload: unknown,
+    timeoutMs: number,
+  ) {
+    return new Promise<boolean>((resolve) => {
+      this.server
+        .to(`driver:${driverId}`)
+        .timeout(timeoutMs)
+        .emit(
+          RealtimeEvent.RIDE_OFFER,
+          payload,
+          (error: Error | null, responses: unknown[]) => {
+            resolve(!error && (responses?.length ?? 0) > 0);
+          },
+        );
+    }).catch(() => false);
   }
 
   emitToOrder(orderId: string, event: string, payload: unknown) {

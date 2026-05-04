@@ -5,6 +5,7 @@ import { DriverStatusValue } from '../driver/driver-status';
 import { PaymentMethodValue } from '../payment/payment-method';
 import { PaymentStatusValue } from '../payment/payment-status';
 import { RealtimeEvent } from '../../common/realtime-events';
+import { RideOfferStatusValue } from '../matching/ride-offer-status';
 import { OrderService } from './order.service';
 import { OrderStatusValue } from './order-status';
 
@@ -34,6 +35,14 @@ interface DriverState {
   status: string;
 }
 
+interface RideOfferState {
+  rideId: string;
+  driverId: string;
+  status: string;
+  expiresAt: Date;
+  acceptedAt?: Date | null;
+}
+
 function createCoreFlowMock() {
   let rideCounter = 0;
   const state = {
@@ -55,9 +64,11 @@ function createCoreFlowMock() {
       method: string;
       status: string;
     }>,
+    rideOffers: new Map<string, RideOfferState>(),
     statusHistory: [] as Array<{ rideId: string; status: string; reason?: string }>,
     queuedJobs: [] as Array<{ name: string; data: unknown }>,
     emittedEvents: [] as Array<{ room: string; event: string; payload: unknown }>,
+    redisCleanups: [] as string[],
   };
 
   const rideApi = {
@@ -79,6 +90,15 @@ function createCoreFlowMock() {
       };
 
       state.rides.set(ride.id, ride);
+      state.rideOffers.set(`${
+        ride.id
+      }:driver-1`, {
+        rideId: ride.id,
+        driverId: 'driver-1',
+        status: RideOfferStatusValue.SENT,
+        expiresAt: new Date(Date.now() + 60_000),
+        acceptedAt: null,
+      });
       for (const history of data.statusHistory?.create ?? []) {
         state.statusHistory.push({ rideId: ride.id, status: history.status });
       }
@@ -192,6 +212,53 @@ function createCoreFlowMock() {
         return data;
       },
     },
+    rideOffer: {
+      findUnique: async ({
+        where,
+      }: {
+        where: { rideId_driverId: { rideId: string; driverId: string } };
+      }) =>
+        state.rideOffers.get(
+          `${where.rideId_driverId.rideId}:${where.rideId_driverId.driverId}`,
+        ) ?? null,
+      update: async ({
+        where,
+        data,
+      }: {
+        where: { rideId_driverId: { rideId: string; driverId: string } };
+        data: { status: string; acceptedAt?: Date };
+      }) => {
+        const key = `${where.rideId_driverId.rideId}:${where.rideId_driverId.driverId}`;
+        const offer = state.rideOffers.get(key);
+        assert.ok(offer, 'ride offer must exist before update');
+
+        const nextOffer = { ...offer, ...data };
+        state.rideOffers.set(key, nextOffer);
+        return nextOffer;
+      },
+      updateMany: async ({
+        where,
+        data,
+      }: {
+        where: { rideId: string; driverId: { not: string }; status: { in: string[] } };
+        data: { status: string };
+      }) => {
+        let count = 0;
+
+        for (const [key, offer] of state.rideOffers.entries()) {
+          if (
+            offer.rideId === where.rideId &&
+            offer.driverId !== where.driverId.not &&
+            where.status.in.includes(offer.status)
+          ) {
+            state.rideOffers.set(key, { ...offer, ...data });
+            count += 1;
+          }
+        }
+
+        return { count };
+      },
+    },
   });
 
   const prisma = {
@@ -230,6 +297,29 @@ function createCoreFlowMock() {
       }) => {
         state.payments.push(data);
         return data;
+      },
+    },
+    rideOffer: {
+      updateMany: async ({
+        where,
+        data,
+      }: {
+        where: { rideId: string; status: { in: string[] } };
+        data: { status: string };
+      }) => {
+        let count = 0;
+
+        for (const [key, offer] of state.rideOffers.entries()) {
+          if (
+            offer.rideId === where.rideId &&
+            where.status.in.includes(offer.status)
+          ) {
+            state.rideOffers.set(key, { ...offer, ...data });
+            count += 1;
+          }
+        }
+
+        return { count };
       },
     },
     $transaction: async <T>(callback: (tx: ReturnType<typeof makeTx>) => Promise<T>) =>
@@ -288,6 +378,10 @@ function createCoreFlowMock() {
 
   const redis = {
     acceptRideWithLock: async () => true,
+    cleanupOffersForRide: async (rideId: string) => {
+      state.redisCleanups.push(rideId);
+      return { rideId, deleted: 1 };
+    },
     client: {
       get: async () => null,
       set: async () => 'OK',
@@ -325,6 +419,8 @@ function createCoreFlowMock() {
 
 async function main() {
   await testLifecycleCreatesPendingPayment();
+  await testAcceptRequiresActiveRideOffer();
+  await testAcceptRejectsExpiredRideOffer();
   await testInvalidTransitionFails();
   await testPassengerCanCancelBeforeTripStarts();
   await testDriverCanCancelAssignedRideAndReturnsOnline();
@@ -367,6 +463,11 @@ async function testLifecycleCreatesPendingPayment() {
   const acceptedRide = await service.accept(createdRide.id, 'driver-1', driverUser);
   assert.equal(acceptedRide.status, OrderStatusValue.DRIVER_ASSIGNED);
   assert.equal(acceptedRide.driverId, 'driver-1');
+  assert.equal(
+    state.rideOffers.get(`${createdRide.id}:driver-1`)?.status,
+    RideOfferStatusValue.ACCEPTED,
+  );
+  assert.deepEqual(state.redisCleanups, [createdRide.id]);
 
   const arrivedRide = await service.markDriverArrived(createdRide.id, driverUser);
   assert.equal(arrivedRide.status, OrderStatusValue.DRIVER_ARRIVED);
@@ -424,6 +525,72 @@ async function testLifecycleCreatesPendingPayment() {
   );
 }
 
+async function testAcceptRequiresActiveRideOffer() {
+  const { service, state } = createCoreFlowMock();
+  const passengerUser = {
+    userId: 'passenger-1',
+    role: UserRoleValue.PASSENGER,
+  };
+  const driverUser = {
+    userId: 'driver-user-1',
+    role: UserRoleValue.DRIVER,
+  };
+
+  const createdRide = await service.create({
+    customerId: passengerUser.userId,
+    pickupLat: 41.0167,
+    pickupLng: 70.1436,
+    dropoffLat: 41.03,
+    dropoffLng: 70.16,
+  });
+  state.rideOffers.delete(`${createdRide.id}:driver-1`);
+
+  await assert.rejects(
+    () => service.accept(createdRide.id, 'driver-1', driverUser),
+    (error) =>
+      error instanceof BadRequestException &&
+      /Ride offer is not active for this driver/.test(error.message),
+  );
+  assert.equal(state.rides.get(createdRide.id)?.status, OrderStatusValue.SEARCHING_DRIVER);
+  assert.equal(state.drivers.get('driver-1')?.status, DriverStatusValue.ONLINE);
+}
+
+async function testAcceptRejectsExpiredRideOffer() {
+  const { service, state } = createCoreFlowMock();
+  const passengerUser = {
+    userId: 'passenger-1',
+    role: UserRoleValue.PASSENGER,
+  };
+  const driverUser = {
+    userId: 'driver-user-1',
+    role: UserRoleValue.DRIVER,
+  };
+
+  const createdRide = await service.create({
+    customerId: passengerUser.userId,
+    pickupLat: 41.0167,
+    pickupLng: 70.1436,
+    dropoffLat: 41.03,
+    dropoffLng: 70.16,
+  });
+  const offerKey = `${createdRide.id}:driver-1`;
+  const offer = state.rideOffers.get(offerKey);
+  assert.ok(offer, 'ride offer must exist before expiring it');
+  state.rideOffers.set(offerKey, {
+    ...offer,
+    expiresAt: new Date(Date.now() - 1_000),
+  });
+
+  await assert.rejects(
+    () => service.accept(createdRide.id, 'driver-1', driverUser),
+    (error) =>
+      error instanceof BadRequestException &&
+      /Ride offer expired/.test(error.message),
+  );
+  assert.equal(state.rides.get(createdRide.id)?.status, OrderStatusValue.SEARCHING_DRIVER);
+  assert.equal(state.drivers.get('driver-1')?.status, DriverStatusValue.ONLINE);
+}
+
 async function testInvalidTransitionFails() {
   const { service } = createCoreFlowMock();
   const passengerUser = {
@@ -476,6 +643,11 @@ async function testPassengerCanCancelBeforeTripStarts() {
 
   assert.equal(cancelled.ride.status, OrderStatusValue.CANCELLED);
   assert.equal(cancelled.ride.cancelReason, 'PASSENGER_CHANGED_PLANS');
+  assert.equal(
+    state.rideOffers.get(`${createdRide.id}:driver-1`)?.status,
+    RideOfferStatusValue.EXPIRED,
+  );
+  assert.deepEqual(state.redisCleanups, [createdRide.id]);
   assert.equal(
     state.statusHistory.at(-1)?.reason,
     'PASSENGER_CHANGED_PLANS',

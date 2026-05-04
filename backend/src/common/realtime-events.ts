@@ -1,4 +1,12 @@
 export const RealtimeEvent = {
+  RIDE_NEW_ORDER: 'ride.new_order',
+  RIDE_OFFER: 'ride.offer',
+  RIDE_DRIVER_ASSIGNED: 'ride.driver_assigned',
+  RIDE_DRIVER_ARRIVED: 'ride.driver_arrived',
+  RIDE_STARTED: 'ride.started',
+  RIDE_COMPLETED: 'ride.completed',
+  RIDE_CANCELLED_UNIFIED: 'ride.cancelled',
+  RIDE_MATCHING_FAILED: 'ride.matching_failed',
   NEW_ORDER: 'NEW_ORDER',
   NEW_RIDE_OFFER_LOWER: 'new_ride_offer',
   DRIVER_ACCEPTED: 'DRIVER_ACCEPTED',

@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -23,6 +24,7 @@ import {
   DEFAULT_TARIFF_CLASS,
   TariffClass,
 } from '../pricing/tariff-class';
+import { RideOfferStatusValue } from '../matching/ride-offer-status';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { ORDER_STATUS_FLOW, OrderStatus, OrderStatusValue } from './order-status';
 import { getRideStatusesForHistoryFilter } from './ride-history-filter';
@@ -33,8 +35,16 @@ interface CompleteTripInput {
   stopMinutes?: number;
 }
 
+const ACTIVE_RIDE_OFFER_STATUSES: string[] = [
+  RideOfferStatusValue.PENDING,
+  RideOfferStatusValue.SENT,
+  RideOfferStatusValue.ACKED,
+];
+
 @Injectable()
 export class OrderService {
+  private readonly logger = new Logger(OrderService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentService: PaymentService,
@@ -85,6 +95,8 @@ export class OrderService {
       },
     );
 
+    this.socket.emitToPassenger(ride.customerId, RealtimeEvent.RIDE_NEW_ORDER, ride);
+    this.socket.emitToOrder(ride.id, RealtimeEvent.RIDE_NEW_ORDER, ride);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.NEW_ORDER, ride);
     this.socket.emitToOrder(ride.id, RealtimeEvent.NEW_ORDER, ride);
     this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, ride);
@@ -199,6 +211,7 @@ export class OrderService {
   async accept(rideId: string, driverId: string, user?: AuthUser) {
     await this.assertDriverActor(driverId, user);
     const lockAcquired = await this.redis.acceptRideWithLock(rideId, driverId);
+    const acceptedAt = new Date();
 
     if (!lockAcquired) {
       throw new BadRequestException(
@@ -207,6 +220,29 @@ export class OrderService {
     }
 
     const ride = await this.prisma.$transaction(async (tx) => {
+      const rideOffer = await tx.rideOffer.findUnique({
+        where: {
+          rideId_driverId: {
+            rideId,
+            driverId,
+          },
+        },
+      });
+
+      if (!rideOffer) {
+        throw new BadRequestException('Ride offer is not active for this driver');
+      }
+
+      if (rideOffer.expiresAt <= acceptedAt) {
+        throw new BadRequestException('Ride offer expired');
+      }
+
+      if (
+        !ACTIVE_RIDE_OFFER_STATUSES.includes(rideOffer.status)
+      ) {
+        throw new BadRequestException('Ride offer is not active for this driver');
+      }
+
       const driverUpdate = await tx.driver.updateMany({
         where: {
           id: driverId,
@@ -260,10 +296,40 @@ export class OrderService {
         throw new NotFoundException('Ride not found');
       }
 
+      await tx.rideOffer.update({
+        where: {
+          rideId_driverId: {
+            rideId,
+            driverId,
+          },
+        },
+        data: {
+          status: RideOfferStatusValue.ACCEPTED,
+          acceptedAt,
+        },
+      });
+
+      await tx.rideOffer.updateMany({
+        where: {
+          rideId,
+          driverId: { not: driverId },
+          status: {
+            in: ACTIVE_RIDE_OFFER_STATUSES,
+          },
+        },
+        data: {
+          status: RideOfferStatusValue.EXPIRED,
+        },
+      });
+
       return assignedRide;
     });
 
+    await this.cleanupRedisOffersForRide(rideId);
+
     this.socket.emitToDriver(driverId, RealtimeEvent.DRIVER_ACCEPTED, ride);
+    this.socket.emitToPassenger(ride.customerId, RealtimeEvent.RIDE_DRIVER_ASSIGNED, ride);
+    this.socket.emitToOrder(ride.id, RealtimeEvent.RIDE_DRIVER_ASSIGNED, ride);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.DRIVER_ACCEPTED, ride);
     this.socket.emitToPassenger(
       ride.customerId,
@@ -287,6 +353,8 @@ export class OrderService {
     await this.assertRideDriverAccess(rideId, user);
     const ride = await this.transitionRide(rideId, OrderStatusValue.DRIVER_ARRIVED);
 
+    this.socket.emitToOrder(ride.id, RealtimeEvent.RIDE_DRIVER_ARRIVED, ride);
+    this.socket.emitToPassenger(ride.customerId, RealtimeEvent.RIDE_DRIVER_ARRIVED, ride);
     this.socket.emitToOrder(ride.id, RealtimeEvent.DRIVER_ARRIVED, ride);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.DRIVER_ARRIVED, ride);
     this.socket.emitToPassenger(
@@ -302,6 +370,8 @@ export class OrderService {
     await this.assertRideDriverAccess(rideId, user);
     const ride = await this.transitionRide(rideId, OrderStatusValue.IN_PROGRESS);
 
+    this.socket.emitToOrder(ride.id, RealtimeEvent.RIDE_STARTED, ride);
+    this.socket.emitToPassenger(ride.customerId, RealtimeEvent.RIDE_STARTED, ride);
     this.socket.emitToOrder(ride.id, RealtimeEvent.TRIP_STARTED, ride);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.TRIP_STARTED, ride);
     this.socket.emitToPassenger(
@@ -361,6 +431,8 @@ export class OrderService {
     }
 
     const payload = { ride, payment };
+    this.socket.emitToOrder(ride.id, RealtimeEvent.RIDE_COMPLETED, payload);
+    this.socket.emitToPassenger(ride.customerId, RealtimeEvent.RIDE_COMPLETED, payload);
     this.socket.emitToOrder(ride.id, RealtimeEvent.TRIP_COMPLETED, payload);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.TRIP_COMPLETED, payload);
     this.socket.emitToPassenger(
@@ -401,6 +473,19 @@ export class OrderService {
       },
     });
 
+    await this.prisma.rideOffer.updateMany({
+      where: {
+        rideId,
+        status: {
+          in: ACTIVE_RIDE_OFFER_STATUSES,
+        },
+      },
+      data: {
+        status: RideOfferStatusValue.EXPIRED,
+      },
+    });
+    await this.cleanupRedisOffersForRide(rideId);
+
     if (ride.driverId) {
       await this.prisma.driver.update({
         where: { id: ride.driverId },
@@ -413,6 +498,13 @@ export class OrderService {
     }
 
     const payload = { ride: cancelledRide, reason };
+    this.socket.emitToOrder(cancelledRide.id, RealtimeEvent.RIDE_CANCELLED_UNIFIED, payload);
+    this.socket.emitToAdmins(RealtimeEvent.RIDE_CANCELLED_UNIFIED, payload);
+    this.socket.emitToPassenger(
+      cancelledRide.customerId,
+      RealtimeEvent.RIDE_CANCELLED_UNIFIED,
+      payload,
+    );
     this.socket.emitToOrder(cancelledRide.id, RealtimeEvent.RIDE_CANCELLED, payload);
     this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, payload);
     this.socket.emitToPassenger(
@@ -424,12 +516,29 @@ export class OrderService {
     if (cancelledRide.driverId) {
       this.socket.emitToDriver(
         cancelledRide.driverId,
+        RealtimeEvent.RIDE_CANCELLED_UNIFIED,
+        payload,
+      );
+      this.socket.emitToDriver(
+        cancelledRide.driverId,
         RealtimeEvent.RIDE_CANCELLED,
         payload,
       );
     }
 
     return payload;
+  }
+
+  private async cleanupRedisOffersForRide(rideId: string) {
+    try {
+      await this.redis.cleanupOffersForRide(rideId);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to cleanup Redis ride offers for ride=${rideId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   async pay(rideId: string, user?: AuthUser) {

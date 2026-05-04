@@ -46,6 +46,7 @@ model Driver {
   vehicle   Vehicle?
   documents DriverDocument[]
   rides     Ride[]           @relation("DriverRides")
+  offers    RideOffer[]
 }
 
 model Vehicle {
@@ -98,8 +99,27 @@ model Ride {
 
   customer      User                @relation("CustomerRides", fields: [customerId], references: [id])
   driver        Driver?             @relation("DriverRides", fields: [driverId], references: [id])
+  offers        RideOffer[]
   statusHistory RideStatusHistory[]
   payment       Payment?
+}
+
+model RideOffer {
+  id             String   @id @default(cuid())
+  rideId         String
+  driverId       String
+  status         String   @default("PENDING")
+  distanceMeters Int?
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  rejectedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ride   Ride   @relation(fields: [rideId], references: [id])
+  driver Driver @relation(fields: [driverId], references: [id])
+
+  @@unique([rideId, driverId])
 }
 
 model RideStatusHistory {

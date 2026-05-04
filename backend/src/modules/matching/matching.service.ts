@@ -6,6 +6,7 @@ import { RedisService } from '../../infrastructure/redis/redis.service';
 import { SocketGateway } from '../../infrastructure/socket/socket.gateway';
 import { DriverStatusValue } from '../driver/driver-status';
 import { OrderStatusValue } from '../order/order-status';
+import { RideOfferStatusValue } from './ride-offer-status';
 
 export interface MatchRideInput {
   rideId: string;
@@ -14,6 +15,9 @@ export interface MatchRideInput {
   radiusKm: number;
   offerTimeoutMs: number;
 }
+
+const OFFER_BATCH_SIZE = 3;
+const OFFER_ACK_TIMEOUT_MS = 3_000;
 
 @Injectable()
 export class MatchingService {
@@ -48,37 +52,100 @@ export class MatchingService {
       input.radiusKm,
     );
     const onlineDrivers = await this.filterOnlineDrivers(nearbyDrivers);
+    const alreadyOfferedDriverIds = await this.getAlreadyOfferedDriverIds(
+      ride.id,
+      onlineDrivers.map((driver) => driver.driverId),
+    );
+    const driversToOffer = onlineDrivers
+      .filter((driver) => !alreadyOfferedDriverIds.has(driver.driverId))
+      .slice(0, OFFER_BATCH_SIZE);
     const expiresInSeconds = Math.ceil(input.offerTimeoutMs / 1000);
+    const expiresAt = new Date(Date.now() + input.offerTimeoutMs);
 
-    for (const driver of onlineDrivers) {
-      await this.redis?.createRideOffer(
-        ride.id,
-        driver.driverId,
-        expiresInSeconds,
-      );
-      this.socket.emitToDriver(driver.driverId, RealtimeEvent.NEW_ORDER, {
-        ride,
-        distanceMeters: driver.distanceMeters,
-        expiresInSeconds,
-      });
-      this.socket.emitToDriver(
-        driver.driverId,
-        RealtimeEvent.NEW_RIDE_OFFER_LOWER,
-        {
+    const deliveryResults = await Promise.all(
+      driversToOffer.map(async (driver) => {
+        const offerWhere = {
+          rideId_driverId: {
+            rideId: ride.id,
+            driverId: driver.driverId,
+          },
+        };
+        const payload = {
           ride,
           distanceMeters: driver.distanceMeters,
           expiresInSeconds,
-        },
-      );
-    }
+        };
+
+        await this.prisma.rideOffer.upsert({
+          where: offerWhere,
+          create: {
+            rideId: ride.id,
+            driverId: driver.driverId,
+            status: RideOfferStatusValue.PENDING,
+            distanceMeters: driver.distanceMeters,
+            expiresAt,
+          },
+          update: {
+            status: RideOfferStatusValue.PENDING,
+            distanceMeters: driver.distanceMeters,
+            expiresAt,
+            acceptedAt: null,
+            rejectedAt: null,
+          },
+        });
+
+        await this.redis?.createRideOffer(
+          ride.id,
+          driver.driverId,
+          expiresInSeconds,
+        );
+
+        const ackPromise = this.socket.emitOfferToDriverWithAck(
+          driver.driverId,
+          payload,
+          OFFER_ACK_TIMEOUT_MS,
+        );
+
+        await this.prisma.rideOffer.update({
+          where: offerWhere,
+          data: {
+            status: RideOfferStatusValue.SENT,
+          },
+        });
+
+        const acknowledged = await ackPromise;
+        await this.prisma.rideOffer.update({
+          where: offerWhere,
+          data: {
+            status: acknowledged
+              ? RideOfferStatusValue.ACKED
+              : RideOfferStatusValue.DELIVERY_FAILED,
+          },
+        });
+
+        if (!acknowledged) {
+          await this.redis?.rejectRideOffer(ride.id, driver.driverId);
+          return false;
+        }
+
+        this.socket.emitToDriver(driver.driverId, RealtimeEvent.NEW_ORDER, payload);
+        this.socket.emitToDriver(
+          driver.driverId,
+          RealtimeEvent.NEW_RIDE_OFFER_LOWER,
+          payload,
+        );
+        return true;
+      }),
+    );
+    const offeredDrivers = deliveryResults.filter(Boolean).length;
 
     this.logger.log(
-      `Matching ride ${ride.id}: found ${nearbyDrivers.length} nearby drivers, offered ${onlineDrivers.length} ONLINE drivers, expiresIn=${expiresInSeconds}s`,
+      `Matching ride ${ride.id}: found ${nearbyDrivers.length} nearby drivers, offered ${offeredDrivers} ONLINE drivers, expiresIn=${expiresInSeconds}s`,
     );
 
     return {
       ride,
-      offeredDrivers: onlineDrivers.length,
+      offeredDrivers,
       shouldContinueSearch: true,
     };
   }
@@ -110,6 +177,16 @@ export class MatchingService {
       `Matching ride ${cancelledRide.id}: cancelled with reason NO_DRIVER_FOUND`,
     );
 
+    this.socket.emitToPassenger(
+      cancelledRide.customerId,
+      RealtimeEvent.RIDE_MATCHING_FAILED,
+      cancelledRide,
+    );
+    this.socket.emitToOrder(
+      cancelledRide.id,
+      RealtimeEvent.RIDE_MATCHING_FAILED,
+      cancelledRide,
+    );
     this.socket.emitToPassenger(
       cancelledRide.customerId,
       RealtimeEvent.MATCHING_FAILED,
@@ -148,5 +225,21 @@ export class MatchingService {
         driverId: driver.driverId,
         distanceMeters: distanceByDriverId.get(driver.driverId) ?? driver.distanceMeters,
       }));
+  }
+
+  private async getAlreadyOfferedDriverIds(rideId: string, driverIds: string[]) {
+    if (driverIds.length === 0) {
+      return new Set<string>();
+    }
+
+    const existingOffers = await this.prisma.rideOffer.findMany({
+      where: {
+        rideId,
+        driverId: { in: driverIds },
+      },
+      select: { driverId: true },
+    });
+
+    return new Set(existingOffers.map((offer) => offer.driverId));
   }
 }

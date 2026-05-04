@@ -132,6 +132,31 @@ export class RedisService implements OnModuleDestroy {
     return { key };
   }
 
+  async cleanupOffersForRide(rideId: string) {
+    const pattern = `${this.rideOfferKeyPrefix}:${rideId}:*`;
+    let cursor = '0';
+    let deleted = 0;
+
+    this.logger.log(`Redis ride offers cleanup ride=${rideId}`);
+
+    do {
+      const [nextCursor, keys] = await this.client.scan(
+        cursor,
+        'MATCH',
+        pattern,
+        'COUNT',
+        100,
+      );
+      cursor = nextCursor;
+
+      if (keys.length > 0) {
+        deleted += await this.client.del(...keys);
+      }
+    } while (cursor !== '0');
+
+    return { rideId, deleted };
+  }
+
   async acceptRideWithLock(rideId: string, driverId: string) {
     const key = this.rideLockKey(rideId);
     const result = await this.client.set(key, driverId, 'EX', 30, 'NX');

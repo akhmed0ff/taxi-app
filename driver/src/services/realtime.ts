@@ -61,7 +61,10 @@ export class DriverRealtimeClient {
   onNewOrder(handler: (order: OrderOffer) => void) {
     let lastOfferId: string | undefined;
 
-    const wrappedHandler = (payload: NewOrderPayload) => {
+    const wrappedHandler = (
+      payload: NewOrderPayload,
+      ack?: (response: { ok: boolean }) => void,
+    ) => {
       const ride = payload.ride ?? payload.order;
 
       if (!ride) {
@@ -69,10 +72,12 @@ export class DriverRealtimeClient {
       }
 
       if (ride.id === lastOfferId) {
+        ack?.({ ok: true });
         return;
       }
 
       lastOfferId = ride.id;
+      ack?.({ ok: true });
 
       handler({
         id: ride.id,
@@ -93,9 +98,11 @@ export class DriverRealtimeClient {
       });
     };
 
+    this.socket?.on('ride.offer', wrappedHandler);
     this.socket?.on('NEW_ORDER', wrappedHandler);
     this.socket?.on('new_ride_offer', wrappedHandler);
     return () => {
+      this.socket?.off('ride.offer', wrappedHandler);
       this.socket?.off('NEW_ORDER', wrappedHandler);
       this.socket?.off('new_ride_offer', wrappedHandler);
     };
@@ -110,8 +117,10 @@ export class DriverRealtimeClient {
       }
     };
 
+    this.socket?.on('ride.cancelled', wrappedHandler);
     this.socket?.on('RIDE_CANCELLED', wrappedHandler);
     return () => {
+      this.socket?.off('ride.cancelled', wrappedHandler);
       this.socket?.off('RIDE_CANCELLED', wrappedHandler);
     };
   }
