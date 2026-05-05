@@ -84,6 +84,7 @@ jobs:
         env:
           JWT_SECRET: ci-secret
           NEXT_PUBLIC_API_URL: https://api.example.com
+          NEXT_PUBLIC_ADMIN_PASSWORD: ${{ secrets.NEXT_PUBLIC_ADMIN_PASSWORD }}
 
   deploy:
     name: Deploy To VPS
