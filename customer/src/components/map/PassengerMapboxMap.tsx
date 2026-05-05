@@ -38,7 +38,7 @@ export function PassengerMapboxMap({
   showLocationButton = true,
   showPickupPin = true,
 }: PassengerMapboxMapProps) {
-  const [center, setCenter] = useState({
+  const [, setCenter] = useState({
     latitude: initialPickupLat,
     longitude: initialPickupLng,
   });

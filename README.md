@@ -243,3 +243,4 @@ GitHub Actions запускает сборку backend, typecheck/build адми
 - `VPS_USER`
 - `VPS_SSH_KEY`
 - `VPS_APP_DIR`
+

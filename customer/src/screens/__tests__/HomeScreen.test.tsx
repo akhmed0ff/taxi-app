@@ -1,8 +1,14 @@
-import React from 'react';
-import { View } from 'react-native';
+import { createElement as mockCreateElement } from 'react';
+import { Text as mockText } from 'react-native';
 import { render, waitFor } from '@testing-library/react-native';
 import { HomeScreen } from '../HomeScreen';
-import { Order } from '../../types/order';
+
+jest.mock('@expo/vector-icons', () => {
+  function MockIcon(props: { name?: string }) {
+    return mockCreateElement(mockText, null, props.name ?? '');
+  }
+  return { Ionicons: MockIcon, MaterialCommunityIcons: MockIcon };
+});
 
 jest.mock('expo-location', () => ({
   requestForegroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'denied' }),
@@ -50,15 +56,6 @@ jest.mock('../../services/api', () => ({
 
 describe('HomeScreen', () => {
   it('renders without crashing', async () => {
-    const createdOrder: Order = {
-      id: 'ride-1',
-      status: 'SEARCHING',
-      pickup: { lat: 41.01, lng: 70.14, address: 'Pickup' },
-      dropoff: { lat: 41.02, lng: 70.15, address: 'Dropoff' },
-      tariff: 'STANDARD',
-      price: 12000,
-    };
-
     const { getByText } = render(
       <HomeScreen
         onCancelOrder={jest.fn().mockResolvedValue(undefined)}
