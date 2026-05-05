@@ -12,8 +12,12 @@ interface HistoryRide {
   createdAt: Date;
 }
 
+function historyRides(history: { data: unknown[] }): HistoryRide[] {
+  return history.data as HistoryRide[];
+}
+
 function historyRideIds(history: { data: unknown[] }): string[] {
-  return (history.data as HistoryRide[]).map((ride) => ride.id);
+  return historyRides(history).map((ride) => ride.id);
 }
 
 function createHistoryMock() {
@@ -130,15 +134,19 @@ function createHistoryMock() {
     },
   };
 
-  const noop = {};
+  const paymentService = {};
+  const pricingService = {};
+  const redis = {};
+  const socket = {};
+  const matching = {};
   const rideMatchingQueue = { add: async () => undefined };
   const service = new OrderService(
     prisma as never,
-    noop as never,
-    noop as never,
-    noop as never,
-    noop as never,
-    noop as never,
+    paymentService as never,
+    pricingService as never,
+    redis as never,
+    socket as never,
+    matching as never,
     rideMatchingQueue as never,
   );
 
@@ -247,15 +255,19 @@ async function testPassengerHistoryPaginationSlice() {
       findUnique: async () => ({ id: 'driver-1' }),
     },
   };
-  const noop = {};
+  const paymentService = {};
+  const pricingService = {};
+  const redis = {};
+  const socket = {};
+  const matching = {};
   const rideMatchingQueue = { add: async () => undefined };
   const service = new OrderService(
     prisma as never,
-    noop as never,
-    noop as never,
-    noop as never,
-    noop as never,
-    noop as never,
+    paymentService as never,
+    pricingService as never,
+    redis as never,
+    socket as never,
+    matching as never,
     rideMatchingQueue as never,
   );
   const history = await service.findPassengerHistory(
