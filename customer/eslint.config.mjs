@@ -33,15 +33,21 @@ const jestGlobals = {
 
 const tsRules = {
   ...tsPlugin.configs.recommended.rules,
+
+  // отключаем обычные JS правила
   'no-unused-vars': 'off',
+  'no-redeclare': 'off',
+
+  // включаем TS правила
   '@typescript-eslint/no-unused-vars': [
     'error',
     {
       argsIgnorePattern: '^_',
       varsIgnorePattern: '^_',
-      caughtErrorsIgnorePattern: '^_',
     },
   ],
+
+  '@typescript-eslint/no-redeclare': 'error',
 };
 
 export default [

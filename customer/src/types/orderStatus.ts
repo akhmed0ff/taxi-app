@@ -9,7 +9,6 @@ export const OrderStatus = {
   CANCELLED: 'CANCELLED',
 } as const;
 
-// eslint-disable-next-line no-redeclare -- в TS это один экспорт: значение + тип с одним именем
 export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
 export function normalizeOrderStatus(status: string): OrderStatus {
