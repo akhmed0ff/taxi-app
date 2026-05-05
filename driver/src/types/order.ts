@@ -1,7 +1,7 @@
 export type DriverStatus = 'OFFLINE' | 'ONLINE' | 'BUSY';
 
-export { OrderStatus } from './orderStatus';
-export type { OrderStatus as OrderStatusType } from './orderStatus';
+export { ORDER_STATUSES } from './orderStatus';
+export type { OrderStatus, OrderStatus as OrderStatusType } from './orderStatus';
 
 export interface Coords {
   lat: number;

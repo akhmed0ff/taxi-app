@@ -1,4 +1,4 @@
-export const OrderStatus = {
+export const ORDER_STATUSES = {
   NEW: 'NEW',
   SEARCHING: 'SEARCHING',
   OFFERED: 'OFFERED',
@@ -9,26 +9,26 @@ export const OrderStatus = {
   CANCELLED: 'CANCELLED',
 } as const;
 
-export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
+export type OrderStatus =
+  (typeof ORDER_STATUSES)[keyof typeof ORDER_STATUSES];
 
 export function normalizeOrderStatus(status: string): OrderStatus {
   const value = status.trim();
   const upper = value.toUpperCase();
 
-  if (upper === 'CREATED') return OrderStatus.NEW;
-  if (upper === 'SEARCHING_DRIVER') return OrderStatus.SEARCHING;
-  if (upper === 'DRIVER_ASSIGNED') return OrderStatus.ACCEPTED;
-  if (upper === 'DRIVER_ARRIVED') return OrderStatus.ARRIVING;
-  if (upper === 'IN_PROGRESS') return OrderStatus.IN_PROGRESS;
-  if (upper === 'COMPLETED') return OrderStatus.COMPLETED;
-  if (upper === 'CANCELLED') return OrderStatus.CANCELLED;
+  if (upper === 'CREATED') return ORDER_STATUSES.NEW;
+  if (upper === 'SEARCHING_DRIVER') return ORDER_STATUSES.SEARCHING;
+  if (upper === 'DRIVER_ASSIGNED') return ORDER_STATUSES.ACCEPTED;
+  if (upper === 'DRIVER_ARRIVED') return ORDER_STATUSES.ARRIVING;
+  if (upper === 'IN_PROGRESS') return ORDER_STATUSES.IN_PROGRESS;
+  if (upper === 'COMPLETED') return ORDER_STATUSES.COMPLETED;
+  if (upper === 'CANCELLED') return ORDER_STATUSES.CANCELLED;
 
-  if (upper === 'NEW') return OrderStatus.NEW;
-  if (upper === 'SEARCHING') return OrderStatus.SEARCHING;
-  if (upper === 'OFFERED') return OrderStatus.OFFERED;
-  if (upper === 'ACCEPTED') return OrderStatus.ACCEPTED;
-  if (upper === 'ARRIVING') return OrderStatus.ARRIVING;
+  if (upper === 'NEW') return ORDER_STATUSES.NEW;
+  if (upper === 'SEARCHING') return ORDER_STATUSES.SEARCHING;
+  if (upper === 'OFFERED') return ORDER_STATUSES.OFFERED;
+  if (upper === 'ACCEPTED') return ORDER_STATUSES.ACCEPTED;
+  if (upper === 'ARRIVING') return ORDER_STATUSES.ARRIVING;
 
-  return OrderStatus.OFFERED;
+  return ORDER_STATUSES.OFFERED;
 }
-
