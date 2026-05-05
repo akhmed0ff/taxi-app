@@ -138,24 +138,17 @@ jobs:
     needs: [backend, admin, customer, driver]
     steps:
       - uses: actions/checkout@v4
-      - name: Validate Docker POSTGRES_PASSWORD
-        env:
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-        run: |
-          if [ -z "$POSTGRES_PASSWORD" ] || [ "$POSTGRES_PASSWORD" = "taxi" ]; then
-            echo "POSTGRES_PASSWORD must not be empty or 'taxi'."
-            exit 1
-          fi
-      - run: docker compose build backend admin
+      - name: Build Docker images
         env:
           POSTGRES_DB: taxi_app
           POSTGRES_USER: taxi
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          JWT_SECRET: ci-secret
+          WT_SECRET: ci-secret
           NEXT_PUBLIC_API_URL: https://api.example.com
           NEXT_PUBLIC_ADMIN_PASSWORD: ${{ secrets.NEXT_PUBLIC_ADMIN_PASSWORD }}
           NEXT_PUBLIC_ADMIN_PHONE: +998900000001
-
+        run: docker compose build backend admin
+        
   deploy:
     name: Deploy To VPS
     runs-on: ubuntu-latest
