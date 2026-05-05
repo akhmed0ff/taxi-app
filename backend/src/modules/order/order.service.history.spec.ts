@@ -12,12 +12,20 @@ interface HistoryRide {
   createdAt: Date;
 }
 
-function historyRides(history: { data: unknown[] }): HistoryRide[] {
-  return history.data as HistoryRide[];
+interface HistoryResult {
+  data: HistoryRide[];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
 }
 
-function historyRideIds(history: { data: unknown[] }): string[] {
-  return historyRides(history).map((ride) => ride.id);
+function toHistoryResult(history: unknown): HistoryResult {
+  return history as HistoryResult;
+}
+
+function historyRideIds(history: HistoryResult): string[] {
+  return history.data.map((ride) => ride.id);
 }
 
 function createHistoryMock() {
@@ -165,10 +173,10 @@ async function main() {
 async function testPassengerHistoryActiveFilter() {
   const { service } = createHistoryMock();
 
-  const history = await service.findPassengerHistory(
+  const history = toHistoryResult(await service.findPassengerHistory(
     { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
     'active',
-  );
+  ));
 
   assert.deepEqual(
     historyRideIds(history),
@@ -179,10 +187,10 @@ async function testPassengerHistoryActiveFilter() {
 async function testPassengerHistoryCompletedFilter() {
   const { service } = createHistoryMock();
 
-  const history = await service.findPassengerHistory(
+  const history = toHistoryResult(await service.findPassengerHistory(
     { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
     'completed',
-  );
+  ));
 
   assert.deepEqual(
     historyRideIds(history),
@@ -193,10 +201,10 @@ async function testPassengerHistoryCompletedFilter() {
 async function testPassengerHistoryCancelledFilter() {
   const { service } = createHistoryMock();
 
-  const history = await service.findPassengerHistory(
+  const history = toHistoryResult(await service.findPassengerHistory(
     { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
     'cancelled',
-  );
+  ));
 
   assert.deepEqual(
     historyRideIds(history),
@@ -207,10 +215,10 @@ async function testPassengerHistoryCancelledFilter() {
 async function testDriverHistoryCompletedFilter() {
   const { service } = createHistoryMock();
 
-  const history = await service.findDriverHistory(
+  const history = toHistoryResult(await service.findDriverHistory(
     { userId: 'driver-user-1', role: UserRoleValue.DRIVER },
     'completed',
-  );
+  ));
 
   assert.deepEqual(
     historyRideIds(history),
@@ -270,12 +278,12 @@ async function testPassengerHistoryPaginationSlice() {
     matching as never,
     rideMatchingQueue as never,
   );
-  const history = await service.findPassengerHistory(
+  const history = toHistoryResult(await service.findPassengerHistory(
     { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
     'completed',
     2,
     5,
-  );
+  ));
 
   assert.deepEqual(historyRideIds(history), [
     'ride-7',
