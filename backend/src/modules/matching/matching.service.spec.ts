@@ -291,26 +291,48 @@ async function testOffersOnlyFirstBatchOfOnlineDrivers() {
     offerTimeoutMs: OFFER_TIMEOUT_MS,
   });
 
-  assert.equal(result.offeredDrivers, 3);
+  assert.equal(result.offeredDrivers, 10);
   assert.deepEqual(
     state.offers.map((offer) => offer.driverId),
-    ['driver-1', 'driver-2', 'driver-3'],
+    [
+      'driver-1',
+      'driver-2',
+      'driver-3',
+      'driver-4',
+      'driver-5',
+      'driver-6',
+      'driver-7',
+      'driver-8',
+      'driver-9',
+      'driver-10',
+    ],
   );
   assert.deepEqual(
     state.emitted
       .filter((event) => event.event === RealtimeEvent.NEW_RIDE_OFFER_LOWER)
       .map((event) => event.driverId),
-    ['driver-1', 'driver-2', 'driver-3'],
+    [
+      'driver-1',
+      'driver-2',
+      'driver-3',
+      'driver-4',
+      'driver-5',
+      'driver-6',
+      'driver-7',
+      'driver-8',
+      'driver-9',
+      'driver-10',
+    ],
   );
 }
 
 async function testNextAttemptSkipsPreviousBatchAndOffersNextBatch() {
   const { service, state } = createMatchingMock();
-  state.drivers = Array.from({ length: 10 }, (_, index) => ({
+  state.drivers = Array.from({ length: 20 }, (_, index) => ({
     id: `driver-${index + 1}`,
     status: DriverStatusValue.ONLINE,
   }));
-  state.geoDrivers = Array.from({ length: 10 }, (_, index) => ({
+  state.geoDrivers = Array.from({ length: 20 }, (_, index) => ({
     driverId: `driver-${index + 1}`,
     distanceMeters: (index + 1) * 100,
   }));
@@ -332,13 +354,24 @@ async function testNextAttemptSkipsPreviousBatchAndOffersNextBatch() {
     offerTimeoutMs: OFFER_TIMEOUT_MS,
   });
 
-  assert.equal(firstResult.offeredDrivers, 3);
-  assert.equal(secondResult.offeredDrivers, 3);
+  assert.equal(firstResult.offeredDrivers, 10);
+  assert.equal(secondResult.offeredDrivers, 10);
   assert.deepEqual(
     state.emitted
       .filter((event) => event.event === RealtimeEvent.NEW_RIDE_OFFER_LOWER)
       .map((event) => event.driverId),
-    ['driver-4', 'driver-5', 'driver-6'],
+    [
+      'driver-11',
+      'driver-12',
+      'driver-13',
+      'driver-14',
+      'driver-15',
+      'driver-16',
+      'driver-17',
+      'driver-18',
+      'driver-19',
+      'driver-20',
+    ],
   );
   assert.deepEqual(
     state.offers.map((offer) => offer.driverId),
@@ -349,6 +382,20 @@ async function testNextAttemptSkipsPreviousBatchAndOffersNextBatch() {
       'driver-4',
       'driver-5',
       'driver-6',
+      'driver-7',
+      'driver-8',
+      'driver-9',
+      'driver-10',
+      'driver-11',
+      'driver-12',
+      'driver-13',
+      'driver-14',
+      'driver-15',
+      'driver-16',
+      'driver-17',
+      'driver-18',
+      'driver-19',
+      'driver-20',
     ],
   );
 }

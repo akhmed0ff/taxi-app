@@ -12,6 +12,10 @@ interface HistoryRide {
   createdAt: Date;
 }
 
+function historyRideIds(history: { data: unknown[] }) {
+  return (history.data as HistoryRide[]).map((ride) => ride.id);
+}
+
 function createHistoryMock() {
   const rides: HistoryRide[] = [
     {
@@ -127,6 +131,7 @@ function createHistoryMock() {
   };
 
   const noop = {};
+  const queue = { add: async () => undefined };
   const service = new OrderService(
     prisma as never,
     noop as never,
@@ -134,6 +139,7 @@ function createHistoryMock() {
     noop as never,
     noop as never,
     noop as never,
+    queue as never,
   );
 
   return { service };
@@ -157,7 +163,7 @@ async function testPassengerHistoryActiveFilter() {
   );
 
   assert.deepEqual(
-    history.data.map((ride) => ride.id),
+    historyRideIds(history),
     ['ride-active-progress', 'ride-active-searching'],
   );
 }
@@ -171,7 +177,7 @@ async function testPassengerHistoryCompletedFilter() {
   );
 
   assert.deepEqual(
-    history.data.map((ride) => ride.id),
+    historyRideIds(history),
     ['ride-completed'],
   );
 }
@@ -185,7 +191,7 @@ async function testPassengerHistoryCancelledFilter() {
   );
 
   assert.deepEqual(
-    history.data.map((ride) => ride.id),
+    historyRideIds(history),
     ['ride-cancelled'],
   );
 }
@@ -199,7 +205,7 @@ async function testDriverHistoryCompletedFilter() {
   );
 
   assert.deepEqual(
-    history.data.map((ride) => ride.id),
+    historyRideIds(history),
     ['ride-completed'],
   );
 }
@@ -242,6 +248,7 @@ async function testPassengerHistoryPaginationSlice() {
     },
   };
   const noop = {};
+  const queue = { add: async () => undefined };
   const service = new OrderService(
     prisma as never,
     noop as never,
@@ -249,6 +256,7 @@ async function testPassengerHistoryPaginationSlice() {
     noop as never,
     noop as never,
     noop as never,
+    queue as never,
   );
   const history = await service.findPassengerHistory(
     { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
@@ -257,7 +265,7 @@ async function testPassengerHistoryPaginationSlice() {
     5,
   );
 
-  assert.deepEqual(history.data.map((ride) => ride.id), [
+  assert.deepEqual(historyRideIds(history), [
     'ride-7',
     'ride-6',
     'ride-5',
