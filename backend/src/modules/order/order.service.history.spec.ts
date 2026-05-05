@@ -12,7 +12,7 @@ interface HistoryRide {
   createdAt: Date;
 }
 
-function historyRideIds(history: { data: unknown[] }) {
+function historyRideIds(history: { data: unknown[] }): string[] {
   return (history.data as HistoryRide[]).map((ride) => ride.id);
 }
 
@@ -131,7 +131,7 @@ function createHistoryMock() {
   };
 
   const noop = {};
-  const queue = { add: async () => undefined };
+  const rideMatchingQueue = { add: async () => undefined };
   const service = new OrderService(
     prisma as never,
     noop as never,
@@ -139,7 +139,7 @@ function createHistoryMock() {
     noop as never,
     noop as never,
     noop as never,
-    queue as never,
+    rideMatchingQueue as never,
   );
 
   return { service };
@@ -248,7 +248,7 @@ async function testPassengerHistoryPaginationSlice() {
     },
   };
   const noop = {};
-  const queue = { add: async () => undefined };
+  const rideMatchingQueue = { add: async () => undefined };
   const service = new OrderService(
     prisma as never,
     noop as never,
@@ -256,7 +256,7 @@ async function testPassengerHistoryPaginationSlice() {
     noop as never,
     noop as never,
     noop as never,
-    queue as never,
+    rideMatchingQueue as never,
   );
   const history = await service.findPassengerHistory(
     { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
