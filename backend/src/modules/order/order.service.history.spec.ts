@@ -100,6 +100,7 @@ function createHistoryMock() {
           })
           .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
           .slice(skip ?? 0, (skip ?? 0) + (take ?? 50)),
+
       count: async ({
         where,
       }: {
@@ -125,6 +126,7 @@ function createHistoryMock() {
           return true;
         }).length,
     },
+
     driver: {
       findUnique: async ({
         where,
@@ -148,6 +150,7 @@ function createHistoryMock() {
   const socket = {};
   const matching = {};
   const rideMatchingQueue = { add: async () => undefined };
+
   const service = new OrderService(
     prisma as never,
     paymentService as never,
@@ -173,57 +176,56 @@ async function main() {
 async function testPassengerHistoryActiveFilter() {
   const { service } = createHistoryMock();
 
-  const history = toHistoryResult(await service.findPassengerHistory(
-    { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
-    'active',
-  ));
-
-  assert.deepEqual(
-    historyRideIds(history),
-    ['ride-active-progress', 'ride-active-searching'],
+  const history = toHistoryResult(
+    await service.findPassengerHistory(
+      { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
+      'active',
+    ),
   );
+
+  assert.deepEqual(historyRideIds(history), [
+    'ride-active-progress',
+    'ride-active-searching',
+  ]);
 }
 
 async function testPassengerHistoryCompletedFilter() {
   const { service } = createHistoryMock();
 
-  const history = toHistoryResult(await service.findPassengerHistory(
-    { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
-    'completed',
-  ));
-
-  assert.deepEqual(
-    historyRideIds(history),
-    ['ride-completed'],
+  const history = toHistoryResult(
+    await service.findPassengerHistory(
+      { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
+      'completed',
+    ),
   );
+
+  assert.deepEqual(historyRideIds(history), ['ride-completed']);
 }
 
 async function testPassengerHistoryCancelledFilter() {
   const { service } = createHistoryMock();
 
-  const history = toHistoryResult(await service.findPassengerHistory(
-    { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
-    'cancelled',
-  ));
-
-  assert.deepEqual(
-    historyRideIds(history),
-    ['ride-cancelled'],
+  const history = toHistoryResult(
+    await service.findPassengerHistory(
+      { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
+      'cancelled',
+    ),
   );
+
+  assert.deepEqual(historyRideIds(history), ['ride-cancelled']);
 }
 
 async function testDriverHistoryCompletedFilter() {
   const { service } = createHistoryMock();
 
-  const history = toHistoryResult(await service.findDriverHistory(
-    { userId: 'driver-user-1', role: UserRoleValue.DRIVER },
-    'completed',
-  ));
-
-  assert.deepEqual(
-    historyRideIds(history),
-    ['ride-completed'],
+  const history = toHistoryResult(
+    await service.findDriverHistory(
+      { userId: 'driver-user-1', role: UserRoleValue.DRIVER },
+      'completed',
+    ),
   );
+
+  assert.deepEqual(historyRideIds(history), ['ride-completed']);
 }
 
 async function testPassengerHistoryPaginationSlice() {
@@ -232,8 +234,11 @@ async function testPassengerHistoryPaginationSlice() {
     customerId: 'passenger-1',
     driverId: 'driver-1',
     status: OrderStatusValue.COMPLETED,
-    createdAt: new Date(`2026-04-29T${String(index).padStart(2, '0')}:00:00.000Z`),
+    createdAt: new Date(
+      `2026-04-29T${String(index).padStart(2, '0')}:00:00.000Z`,
+    ),
   }));
+
   const prisma = {
     ride: {
       findMany: async ({
@@ -241,7 +246,10 @@ async function testPassengerHistoryPaginationSlice() {
         skip,
         take,
       }: {
-        where: { customerId?: string; status?: { in: string[] } };
+        where: {
+          customerId?: string;
+          status?: { in: string[] };
+        };
         skip?: number;
         take?: number;
       }) =>
@@ -250,25 +258,31 @@ async function testPassengerHistoryPaginationSlice() {
             if (where.customerId && ride.customerId !== where.customerId) {
               return false;
             }
+
             if (where.status && !where.status.in.includes(ride.status)) {
               return false;
             }
+
             return true;
           })
           .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
           .slice(skip ?? 0, (skip ?? 0) + (take ?? 50)),
+
       count: async () => rides.length,
     },
+
     driver: {
       findUnique: async () => ({ id: 'driver-1' }),
     },
   };
+
   const paymentService = {};
   const pricingService = {};
   const redis = {};
   const socket = {};
   const matching = {};
   const rideMatchingQueue = { add: async () => undefined };
+
   const service = new OrderService(
     prisma as never,
     paymentService as never,
@@ -278,12 +292,15 @@ async function testPassengerHistoryPaginationSlice() {
     matching as never,
     rideMatchingQueue as never,
   );
-  const history = toHistoryResult(await service.findPassengerHistory(
-    { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
-    'completed',
-    2,
-    5,
-  ));
+
+  const history = toHistoryResult(
+    await service.findPassengerHistory(
+      { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
+      'completed',
+      2,
+      5,
+    ),
+  );
 
   assert.deepEqual(historyRideIds(history), [
     'ride-7',
@@ -292,6 +309,7 @@ async function testPassengerHistoryPaginationSlice() {
     'ride-4',
     'ride-3',
   ]);
+
   assert.equal(history.page, 2);
   assert.equal(history.limit, 5);
   assert.equal(history.total, 12);
