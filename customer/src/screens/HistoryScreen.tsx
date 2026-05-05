@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { fetchPassengerRideHistory } from '../services/api';
 import { RideHistoryFilter, RideHistoryItem } from '../types/order';
-import { OrderStatus } from '../types/orderStatus';
+import { ORDER_STATUSES } from '../types/orderStatus';
 
 const filters: RideHistoryFilter[] = ['active', 'completed', 'cancelled'];
 
@@ -134,12 +134,12 @@ function filterLabel(filter: RideHistoryFilter) {
 }
 
 function statusLabel(status: RideHistoryItem['status']) {
-  if (status === OrderStatus.COMPLETED) return 'Завершена';
-  if (status === OrderStatus.CANCELLED) return 'Отменена';
-  if (status === OrderStatus.SEARCHING) return 'Поиск водителя';
-  if (status === OrderStatus.ACCEPTED) return 'Водитель назначен';
-  if (status === OrderStatus.ARRIVING) return 'Водитель на месте';
-  if (status === OrderStatus.IN_PROGRESS) return 'В поездке';
+  if (status === ORDER_STATUSES.COMPLETED) return 'Завершена';
+  if (status === ORDER_STATUSES.CANCELLED) return 'Отменена';
+  if (status === ORDER_STATUSES.SEARCHING) return 'Поиск водителя';
+  if (status === ORDER_STATUSES.ACCEPTED) return 'Водитель назначен';
+  if (status === ORDER_STATUSES.ARRIVING) return 'Водитель на месте';
+  if (status === ORDER_STATUSES.IN_PROGRESS) return 'В поездке';
   return status;
 }
 

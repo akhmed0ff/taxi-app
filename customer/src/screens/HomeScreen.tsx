@@ -38,7 +38,7 @@ import {
 } from '../services/locations/locationProvider';
 import { usePassengerRideState } from '../state/passengerRideState';
 import { Order, Point, TariffClass } from '../types/order';
-import { OrderStatus } from '../types/orderStatus';
+import { ORDER_STATUSES } from '../types/orderStatus';
 
 interface HomeScreenProps {
   order?: Order;
@@ -111,24 +111,24 @@ export function HomeScreen({
   const currentPoint = pickup.point;
 
   const activeOrder =
-    order && order.status !== OrderStatus.CANCELLED ? order : undefined;
+    order && order.status !== ORDER_STATUSES.CANCELLED ? order : undefined;
 
   const isOrderSearching =
     !!activeOrder &&
-    (activeOrder.status === OrderStatus.NEW ||
-      activeOrder.status === OrderStatus.SEARCHING ||
-      activeOrder.status === OrderStatus.OFFERED);
+    (activeOrder.status === ORDER_STATUSES.NEW ||
+      activeOrder.status === ORDER_STATUSES.SEARCHING ||
+      activeOrder.status === ORDER_STATUSES.OFFERED);
 
   const isOrderDriverFound =
     !!activeOrder &&
-    (activeOrder.status === OrderStatus.ACCEPTED ||
-      activeOrder.status === OrderStatus.ARRIVING);
+    (activeOrder.status === ORDER_STATUSES.ACCEPTED ||
+      activeOrder.status === ORDER_STATUSES.ARRIVING);
 
   const isOrderRiding =
-    !!activeOrder && activeOrder.status === OrderStatus.IN_PROGRESS;
+    !!activeOrder && activeOrder.status === ORDER_STATUSES.IN_PROGRESS;
 
   const isOrderCompleted =
-    !!activeOrder && activeOrder.status === OrderStatus.COMPLETED;
+    !!activeOrder && activeOrder.status === ORDER_STATUSES.COMPLETED;
 
   const displayDriver = activeOrder?.driver ?? rideState.driver;
   const displayOrderId = activeOrder?.id ?? rideState.orderId;
@@ -190,7 +190,7 @@ export function HomeScreen({
   }, []);
 
   useEffect(() => {
-    if (!order?.id || order.status === OrderStatus.CANCELLED || !order.dropoff) {
+    if (!order?.id || order.status === ORDER_STATUSES.CANCELLED || !order.dropoff) {
       return;
     }
     const drop = order.dropoff;
@@ -280,18 +280,18 @@ export function HomeScreen({
   }, [isCreatingOrder, isOrderSearching, pulseAnim]);
 
   useEffect(() => {
-    if (order?.status === OrderStatus.ACCEPTED || order?.status === OrderStatus.ARRIVING) {
+    if (order?.status === ORDER_STATUSES.ACCEPTED || order?.status === ORDER_STATUSES.ARRIVING) {
       markDriverAssigned(order);
       return;
     }
 
-    if (order?.status === OrderStatus.IN_PROGRESS) {
+    if (order?.status === ORDER_STATUSES.IN_PROGRESS) {
       markDriverAssigned(order);
       markRideStarted();
       return;
     }
 
-    if (order?.status === OrderStatus.COMPLETED) {
+    if (order?.status === ORDER_STATUSES.COMPLETED) {
       markRideCompleted();
       return;
     }

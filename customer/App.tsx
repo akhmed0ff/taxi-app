@@ -20,7 +20,7 @@ import {
 } from './src/services/api';
 import { realtimeClient } from './src/services/realtime';
 import { Order, Point, TariffClass } from './src/types/order';
-import { OrderStatus } from './src/types/orderStatus';
+import { ORDER_STATUSES } from './src/types/orderStatus';
 
 type Screen = 'auth' | 'home' | 'tariff' | 'search' | 'trip' | 'complete' | 'history';
 
@@ -89,17 +89,17 @@ export default function App() {
         }
 
         if (
-          nextOrder.status === OrderStatus.ARRIVING ||
-          nextOrder.status === OrderStatus.IN_PROGRESS
+          nextOrder.status === ORDER_STATUSES.ARRIVING ||
+          nextOrder.status === ORDER_STATUSES.IN_PROGRESS
         ) {
           setScreen('home');
         }
 
-        if (nextOrder.status === OrderStatus.COMPLETED) {
+        if (nextOrder.status === ORDER_STATUSES.COMPLETED) {
           setScreen('complete');
         }
 
-        if (nextOrder.status === OrderStatus.CANCELLED) {
+        if (nextOrder.status === ORDER_STATUSES.CANCELLED) {
           setScreen('home');
           return undefined;
         }

@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { mapRideToOrder } from './api';
 import { Order, TariffClass } from '../types/order';
-import { OrderStatus } from '../types/orderStatus';
+import { ORDER_STATUSES } from '../types/orderStatus';
 
 const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL ?? 'http://localhost:3000';
 
@@ -126,15 +126,15 @@ export class RealtimeClient {
     this.socket.on('DRIVER_ACCEPTED', handleRideEvent);
     this.socket.on('DRIVER_ASSIGNED', handleRideEvent);
     const handleDriverAssigned = (payload: BackendOrderEvent) =>
-      handleStatusEvent(payload, OrderStatus.ACCEPTED);
+      handleStatusEvent(payload, ORDER_STATUSES.ACCEPTED);
     const handleDriverArrived = (payload: BackendOrderEvent) =>
-      handleStatusEvent(payload, OrderStatus.ARRIVING);
+      handleStatusEvent(payload, ORDER_STATUSES.ARRIVING);
     const handleRideStarted = (payload: BackendOrderEvent) =>
-      handleStatusEvent(payload, OrderStatus.IN_PROGRESS);
+      handleStatusEvent(payload, ORDER_STATUSES.IN_PROGRESS);
     const handleRideCompleted = (payload: BackendOrderEvent) =>
-      handleStatusEvent(payload, OrderStatus.COMPLETED);
+      handleStatusEvent(payload, ORDER_STATUSES.COMPLETED);
     const handleRideCancelled = (payload: BackendOrderEvent) =>
-      handleStatusEvent(payload, OrderStatus.CANCELLED);
+      handleStatusEvent(payload, ORDER_STATUSES.CANCELLED);
 
     this.socket.on('driver_assigned', handleDriverAssigned);
     this.socket.on('DRIVER_ARRIVED', handleRideEvent);

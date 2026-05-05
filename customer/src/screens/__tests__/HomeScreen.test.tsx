@@ -1,6 +1,6 @@
 import { createElement as mockCreateElement } from 'react';
 import { Text as mockText } from 'react-native';
-import { render, waitFor } from '@testing-library/react-native';
+import { act, render } from '@testing-library/react-native';
 import { HomeScreen } from '../HomeScreen';
 
 jest.mock('@expo/vector-icons', () => {
@@ -64,8 +64,10 @@ describe('HomeScreen', () => {
       />,
     );
 
-    await waitFor(() => {
-      expect(getByText('Стандарт')).toBeTruthy();
+    await act(async () => {
+      await Promise.resolve();
     });
+
+    expect(getByText('Стандарт')).toBeTruthy();
   });
 });

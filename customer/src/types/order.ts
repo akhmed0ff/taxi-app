@@ -1,6 +1,6 @@
 export type TariffClass = 'STANDARD' | 'COMFORT' | 'COMFORT_PLUS' | 'DELIVERY';
-export { OrderStatus } from './orderStatus';
-export type { OrderStatus as OrderStatusType } from './orderStatus';
+export { ORDER_STATUSES } from './orderStatus';
+export type { OrderStatus, OrderStatus as OrderStatusType } from './orderStatus';
 
 export interface Point {
   lat: number;
