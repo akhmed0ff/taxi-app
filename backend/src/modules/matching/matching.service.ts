@@ -16,8 +16,8 @@ export interface MatchRideInput {
   offerTimeoutMs: number;
 }
 
-const OFFER_BATCH_SIZE = 3;
-const OFFER_ACK_TIMEOUT_MS = 3_000;
+// Dev-friendly: offer to more drivers to reduce flakiness in local testing.
+const OFFER_BATCH_SIZE = 10;
 
 @Injectable()
 export class MatchingService {
@@ -56,88 +56,66 @@ export class MatchingService {
       ride.id,
       onlineDrivers.map((driver) => driver.driverId),
     );
-    const driversToOffer = onlineDrivers
-      .filter((driver) => !alreadyOfferedDriverIds.has(driver.driverId))
-      .slice(0, OFFER_BATCH_SIZE);
+    const availableDrivers = onlineDrivers.filter(
+      (driver) => !alreadyOfferedDriverIds.has(driver.driverId),
+    );
+    const driversToOffer = availableDrivers.slice(0, OFFER_BATCH_SIZE);
     const expiresInSeconds = Math.ceil(input.offerTimeoutMs / 1000);
     const expiresAt = new Date(Date.now() + input.offerTimeoutMs);
 
-    const deliveryResults = await Promise.all(
-      driversToOffer.map(async (driver) => {
-        const offerWhere = {
-          rideId_driverId: {
-            rideId: ride.id,
-            driverId: driver.driverId,
-          },
-        };
-        const payload = {
-          ride,
+    for (const driver of driversToOffer) {
+      const offerWhere = {
+        rideId_driverId: {
+          rideId: ride.id,
+          driverId: driver.driverId,
+        },
+      };
+      const payload = {
+        ride,
+        tariffClass: ride.tariffClass,
+        estimatedFare: ride.estimatedFare,
+        distanceMeters: driver.distanceMeters,
+        expiresInSeconds,
+      };
+
+      await this.prisma.rideOffer.upsert({
+        where: offerWhere,
+        create: {
+          rideId: ride.id,
+          driverId: driver.driverId,
+          status: RideOfferStatusValue.PENDING,
           distanceMeters: driver.distanceMeters,
-          expiresInSeconds,
-        };
+          expiresAt,
+        },
+        update: {
+          status: RideOfferStatusValue.PENDING,
+          distanceMeters: driver.distanceMeters,
+          expiresAt,
+          acceptedAt: null,
+          rejectedAt: null,
+        },
+      });
 
-        await this.prisma.rideOffer.upsert({
-          where: offerWhere,
-          create: {
-            rideId: ride.id,
-            driverId: driver.driverId,
-            status: RideOfferStatusValue.PENDING,
-            distanceMeters: driver.distanceMeters,
-            expiresAt,
-          },
-          update: {
-            status: RideOfferStatusValue.PENDING,
-            distanceMeters: driver.distanceMeters,
-            expiresAt,
-            acceptedAt: null,
-            rejectedAt: null,
-          },
-        });
+      await this.redis?.createRideOffer(
+        ride.id,
+        driver.driverId,
+        expiresInSeconds,
+      );
 
-        await this.redis?.createRideOffer(
-          ride.id,
-          driver.driverId,
-          expiresInSeconds,
-        );
+      this.socket.emitToDriver(
+        driver.driverId,
+        RealtimeEvent.NEW_RIDE_OFFER_LOWER,
+        payload,
+      );
 
-        const ackPromise = this.socket.emitOfferToDriverWithAck(
-          driver.driverId,
-          payload,
-          OFFER_ACK_TIMEOUT_MS,
-        );
-
-        await this.prisma.rideOffer.update({
-          where: offerWhere,
-          data: {
-            status: RideOfferStatusValue.SENT,
-          },
-        });
-
-        const acknowledged = await ackPromise;
-        await this.prisma.rideOffer.update({
-          where: offerWhere,
-          data: {
-            status: acknowledged
-              ? RideOfferStatusValue.ACKED
-              : RideOfferStatusValue.DELIVERY_FAILED,
-          },
-        });
-
-        if (!acknowledged) {
-          await this.redis?.rejectRideOffer(ride.id, driver.driverId);
-          return false;
-        }
-
-        this.socket.emitToDriver(driver.driverId, RealtimeEvent.NEW_ORDER, payload);
-        this.socket.emitToDriver(
-          driver.driverId,
-          RealtimeEvent.NEW_RIDE_OFFER_LOWER,
-          payload,
-        );
-        return true;
-      }),
-    );
-    const offeredDrivers = deliveryResults.filter(Boolean).length;
+      await this.prisma.rideOffer.update({
+        where: offerWhere,
+        data: {
+          status: RideOfferStatusValue.SENT,
+        },
+      });
+    }
+    const offeredDrivers = driversToOffer.length;
 
     this.logger.log(
       `Matching ride ${ride.id}: found ${nearbyDrivers.length} nearby drivers, offered ${offeredDrivers} ONLINE drivers, expiresIn=${expiresInSeconds}s`,

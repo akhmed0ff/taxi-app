@@ -4,8 +4,10 @@ import { SocketModule } from '../../infrastructure/socket/socket.module';
 import { RedisModule } from '../../infrastructure/redis/redis.module';
 import { MapsModule } from '../../infrastructure/maps/maps.module';
 import { AuthModule } from '../auth/auth.module';
+import { MatchingModule } from '../matching/matching.module';
 import { PaymentModule } from '../payment/payment.module';
 import { PricingModule } from '../pricing/pricing.module';
+import { RatingModule } from '../rating/rating.module';
 import { OrderController } from './order.controller';
 import { OrderService } from './order.service';
 
@@ -23,6 +25,8 @@ import { OrderService } from './order.service';
     AuthModule,
     PaymentModule,
     PricingModule,
+    RatingModule,
+    MatchingModule,
     RedisModule,
     MapsModule,
     SocketModule,

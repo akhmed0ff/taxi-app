@@ -1,4 +1,2 @@
-export { MapboxPassengerMap } from './MapboxPassengerMap';
+export { FakeMapPlaceholder } from './FakeMapPlaceholder';
 export { PassengerMapboxMap } from './PassengerMapboxMap';
-export { ReactNativePassengerMap } from './ReactNativePassengerMap';
-export { RouteLine } from './RouteLine';

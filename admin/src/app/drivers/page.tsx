@@ -5,7 +5,7 @@ import { Alert, Button, Card, Drawer, Space, Table, Tag, Typography, message } f
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
-import { AdminDriver, fetchAdminDrivers, formatSom } from '@/services/api';
+import { AdminDriver, fetchAdminDriversPage, formatSom } from '@/services/api';
 import { AdminRealtimeClient } from '@/services/realtime';
 
 const statusColors: Record<AdminDriver['status'], string> = {
@@ -27,25 +27,35 @@ const documentLabels: Record<AdminDriver['documents'], string> = {
 };
 
 export default function DriversPage() {
+  const pageSize = 20;
   const [drivers, setDrivers] = useState<AdminDriver[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [selectedDriver, setSelectedDriver] = useState<AdminDriver | null>(null);
   const [api, contextHolder] = message.useMessage();
 
   const loadDrivers = useCallback(async () => {
+    setLoading(true);
     setError(undefined);
 
     try {
-      setDrivers(await fetchAdminDrivers());
+      const response = await fetchAdminDriversPage(page, pageSize);
+      setDrivers(response.data);
+      setTotal(response.total);
+      setTotalPages(Math.max(response.totalPages, 1));
     } catch (nextError) {
       console.warn(nextError);
       setDrivers([]);
+      setTotal(0);
+      setTotalPages(1);
       setError('Backend API недоступен. Mock fallback отключён.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     void loadDrivers();
@@ -145,9 +155,30 @@ export default function DriversPage() {
             columns={columns}
             dataSource={drivers}
             loading={loading}
+            pagination={false}
             rowKey="id"
             scroll={{ x: 1100 }}
           />
+          <Space
+            align="center"
+            style={{ justifyContent: 'space-between', marginTop: 16, width: '100%' }}
+          >
+            <Typography.Text type="secondary">
+              Страница {page} из {totalPages}. Всего: {total}
+            </Typography.Text>
+            <Space>
+              <Button disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>
+                Предыдущая
+              </Button>
+              <Button
+                disabled={page >= totalPages || loading}
+                onClick={() => setPage((value) => value + 1)}
+                type="primary"
+              >
+                Следующая
+              </Button>
+            </Space>
+          </Space>
         </Card>
       </Space>
 

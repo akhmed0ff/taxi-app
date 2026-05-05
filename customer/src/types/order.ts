@@ -1,13 +1,6 @@
 export type TariffClass = 'STANDARD' | 'COMFORT' | 'COMFORT_PLUS' | 'DELIVERY';
-
-export type OrderStatus =
-  | 'CREATED'
-  | 'SEARCHING_DRIVER'
-  | 'DRIVER_ASSIGNED'
-  | 'DRIVER_ARRIVED'
-  | 'IN_PROGRESS'
-  | 'COMPLETED'
-  | 'CANCELLED';
+export { OrderStatus } from './orderStatus';
+export type { OrderStatus as OrderStatusType } from './orderStatus';
 
 export interface Point {
   lat: number;
@@ -46,7 +39,7 @@ export interface FareBreakdown {
 
 export interface Order {
   id: string;
-  status: OrderStatus;
+  status: import('./orderStatus').OrderStatus;
   pickup: Point;
   dropoff: Point;
   tariff: TariffClass;

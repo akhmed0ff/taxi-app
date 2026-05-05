@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { DriverMapboxMap } from '../components/map';
+import { FakeDriverMap } from '../components/FakeDriverMap';
 import { t } from '../i18n';
 import { ActiveTrip, Coords } from '../types/order';
 
@@ -16,13 +16,7 @@ export function TripScreen({ driverPosition, trip, onStart, onComplete }: TripSc
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
-        <DriverMapboxMap
-          destination={trip.dropoff}
-          driverPosition={driverPosition}
-          pickup={trip.pickup}
-          showToDestinationRoute
-          showToPickupRoute
-        />
+        <FakeDriverMap destination={trip.dropoff} driverPosition={driverPosition} pickup={trip.pickup} />
         <View style={styles.mapBadge}>
           <Text style={styles.mapTitle}>{isInProgress ? t('tripInProgress') : t('passengerNearby')}</Text>
           <Text style={styles.mapMeta}>{trip.dropoffAddress}</Text>

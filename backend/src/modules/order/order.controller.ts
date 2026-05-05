@@ -18,14 +18,19 @@ import { UserRoleValue } from '../../common/roles';
 import { CompleteOrderDto } from './dto/complete-order.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { RateRideDto } from './dto/rate-ride.dto';
 import { OrderService } from './order.service';
+import { RatingService } from '../rating/rating.service';
 
 @Controller('orders')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiTags('orders')
 @ApiBearerAuth()
 export class OrderController {
-  constructor(private readonly orderService: OrderService) {}
+  constructor(
+    private readonly orderService: OrderService,
+    private readonly ratingService: RatingService,
+  ) {}
 
   @Post()
   @Roles(UserRoleValue.PASSENGER, UserRoleValue.ADMIN)
@@ -51,8 +56,15 @@ export class OrderController {
   findPassengerHistory(
     @CurrentUser() user: AuthUser,
     @Query('filter') filter?: string,
-  ) {
-    return this.orderService.findPassengerHistory(user, filter);
+    @Query('page') page = '1',
+    @Query('limit') limit = '20',
+  ): Promise<unknown> {
+    return this.orderService.findPassengerHistory(
+      user,
+      filter,
+      parsePositiveInt(page, 1),
+      parsePositiveInt(limit, 20),
+    );
   }
 
   @Get('history/driver')
@@ -61,8 +73,15 @@ export class OrderController {
   findDriverHistory(
     @CurrentUser() user: AuthUser,
     @Query('filter') filter?: string,
-  ) {
-    return this.orderService.findDriverHistory(user, filter);
+    @Query('page') page = '1',
+    @Query('limit') limit = '20',
+  ): Promise<unknown> {
+    return this.orderService.findDriverHistory(
+      user,
+      filter,
+      parsePositiveInt(page, 1),
+      parsePositiveInt(limit, 20),
+    );
   }
 
   @Get(':rideId')
@@ -133,4 +152,29 @@ export class OrderController {
   pay(@Param('rideId') rideId: string, @CurrentUser() user: AuthUser) {
     return this.orderService.pay(rideId, user);
   }
+
+  @Patch(':rideId/rate')
+  @Roles(UserRoleValue.PASSENGER, UserRoleValue.DRIVER)
+  @ApiOperation({ summary: 'Rate a completed ride' })
+  rate(
+    @Param('rideId') rideId: string,
+    @Body() dto: RateRideDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ratingService.rateRide(
+      rideId,
+      user.userId,
+      dto.rating,
+      user.role === UserRoleValue.DRIVER ? 'DRIVER' : 'PASSENGER',
+    );
+  }
+}
+
+function parsePositiveInt(value: string, fallback: number) {
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return parsed;
 }

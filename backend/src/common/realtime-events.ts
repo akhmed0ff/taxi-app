@@ -7,6 +7,8 @@ export const RealtimeEvent = {
   RIDE_COMPLETED: 'ride.completed',
   RIDE_CANCELLED_UNIFIED: 'ride.cancelled',
   RIDE_MATCHING_FAILED: 'ride.matching_failed',
+  // NEW_ORDER — general new-order event for legacy consumers and logs.
+  // NEW_RIDE_OFFER_LOWER — driver-specific matching offer with accept timer.
   NEW_ORDER: 'NEW_ORDER',
   NEW_RIDE_OFFER_LOWER: 'new_ride_offer',
   DRIVER_ACCEPTED: 'DRIVER_ACCEPTED',

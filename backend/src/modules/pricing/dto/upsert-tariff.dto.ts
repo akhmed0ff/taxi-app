@@ -49,4 +49,29 @@ export class UpsertTariffDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+
+  @ApiPropertyOptional({ example: 'Стандарт' })
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @IsNumber()
+  sortOrder?: number;
+
+  @ApiPropertyOptional({ example: 7 })
+  @IsOptional()
+  @IsNumber()
+  etaMinutes?: number;
+
+  @ApiPropertyOptional({ example: 4 })
+  @IsOptional()
+  @IsNumber()
+  seats?: number;
+
+  @ApiPropertyOptional({ example: 200 })
+  @IsOptional()
+  @IsNumber()
+  pricePer100m?: number;
 }

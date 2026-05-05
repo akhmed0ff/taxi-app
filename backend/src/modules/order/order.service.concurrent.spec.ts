@@ -226,7 +226,13 @@ async function main() {
       emitToOrder: () => undefined,
       emitToAdmins: () => undefined,
     } as never,
-    {} as never,
+    {
+      offerRideToNearbyDrivers: async () => ({
+        offeredDrivers: 0,
+        shouldContinueSearch: false,
+      }),
+    } as never,
+    { add: async () => undefined } as never,
   );
   const adminUser = {
     userId: 'admin-1',

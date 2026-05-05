@@ -1,13 +1,43 @@
 'use client';
 
+/**
+ * TODO(admin UI): создание нового тарифа с нуля, валидация уникальности tariffClass,
+ * массовое включение/выключение, превью как в пассажирском приложении.
+ * Сейчас: правка существующих строк из БД (после migrate + prisma db seed при пустой таблице).
+ */
+
 import { SaveOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, InputNumber, Space, Switch, Table, Typography, message } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Input,
+  InputNumber,
+  Space,
+  Switch,
+  Table,
+  Typography,
+  message,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
 import { AdminTariff, fetchTariffs, formatSom, saveTariff } from '@/services/api';
 
-type NumericTariffField = 'baseFare' | 'perKm' | 'perMinute' | 'surge';
+type NumericTariffField =
+  | 'baseFare'
+  | 'perKm'
+  | 'perMinute'
+  | 'minimumFare'
+  | 'freeWaitingMinutes'
+  | 'stopPerMinute'
+  | 'surge'
+  | 'sortOrder'
+  | 'etaMinutes'
+  | 'seats'
+  | 'pricePer100m';
+
+type TariffEditableField = NumericTariffField | 'active' | 'title';
 
 export default function TariffsPage() {
   const [tariffs, setTariffs] = useState<AdminTariff[]>([]);
@@ -51,10 +81,10 @@ export default function TariffsPage() {
 
   const updateTariff = (
     key: string,
-    field: NumericTariffField | 'active',
-    value: number | boolean | null,
+    field: TariffEditableField,
+    value: number | boolean | string | null,
   ) => {
-    if (value === null) {
+    if (value === null && field !== 'pricePer100m') {
       return;
     }
 
@@ -99,6 +129,69 @@ export default function TariffsPage() {
         ),
       },
       {
+        title: 'Название (приложение)',
+        dataIndex: 'title',
+        render: (value: string, record) => (
+          <Input
+            value={value}
+            onChange={(e) => updateTariff(record.key, 'title', e.target.value)}
+          />
+        ),
+      },
+      {
+        title: 'Порядок',
+        dataIndex: 'sortOrder',
+        width: 100,
+        render: (value: number, record) => (
+          <InputNumber
+            min={0}
+            step={1}
+            value={value}
+            onChange={(nextValue) => updateTariff(record.key, 'sortOrder', nextValue)}
+          />
+        ),
+      },
+      {
+        title: 'ETA (мин)',
+        dataIndex: 'etaMinutes',
+        width: 110,
+        render: (value: number, record) => (
+          <InputNumber
+            min={1}
+            step={1}
+            value={value}
+            onChange={(nextValue) => updateTariff(record.key, 'etaMinutes', nextValue)}
+          />
+        ),
+      },
+      {
+        title: 'Мест',
+        dataIndex: 'seats',
+        width: 90,
+        render: (value: number, record) => (
+          <InputNumber
+            min={1}
+            max={8}
+            step={1}
+            value={value}
+            onChange={(nextValue) => updateTariff(record.key, 'seats', nextValue)}
+          />
+        ),
+      },
+      {
+        title: 'Цена / 100 м',
+        dataIndex: 'pricePer100m',
+        width: 120,
+        render: (value: number | null | undefined, record) => (
+          <InputNumber
+            min={0}
+            step={50}
+            value={value ?? undefined}
+            onChange={(nextValue) => updateTariff(record.key, 'pricePer100m', nextValue ?? null)}
+          />
+        ),
+      },
+      {
         title: 'Подача',
         dataIndex: 'baseFare',
         render: (value: number, record) => (
@@ -123,6 +216,34 @@ export default function TariffsPage() {
         ),
       },
       {
+        title: 'Мин. заказ',
+        dataIndex: 'minimumFare',
+        width: 120,
+        render: (value: number, record) => (
+          <InputNumber
+            min={0}
+            step={500}
+            value={value}
+            onChange={(nextValue) => updateTariff(record.key, 'minimumFare', nextValue)}
+          />
+        ),
+      },
+      {
+        title: 'Беспл. ожид. (мин)',
+        dataIndex: 'freeWaitingMinutes',
+        width: 130,
+        render: (value: number, record) => (
+          <InputNumber
+            min={0}
+            step={1}
+            value={value}
+            onChange={(nextValue) =>
+              updateTariff(record.key, 'freeWaitingMinutes', nextValue)
+            }
+          />
+        ),
+      },
+      {
         title: 'Ожидание / мин',
         dataIndex: 'perMinute',
         render: (value: number, record) => (
@@ -131,6 +252,19 @@ export default function TariffsPage() {
             step={50}
             value={value}
             onChange={(nextValue) => updateTariff(record.key, 'perMinute', nextValue)}
+          />
+        ),
+      },
+      {
+        title: 'Остановки / мин',
+        dataIndex: 'stopPerMinute',
+        width: 130,
+        render: (value: number, record) => (
+          <InputNumber
+            min={0}
+            step={50}
+            value={value}
+            onChange={(nextValue) => updateTariff(record.key, 'stopPerMinute', nextValue)}
           />
         ),
       },
@@ -188,6 +322,15 @@ export default function TariffsPage() {
         </div>
 
         {error && <Alert message={error} type="error" showIcon />}
+
+        {!loading && tariffs.length === 0 && !error ? (
+          <Alert
+            message="В базе нет тарифов"
+            description="Из каталога backend выполните: npx prisma db seed (данные не перезаписывают существующие строки)."
+            type="info"
+            showIcon
+          />
+        ) : null}
 
         <Card>
           <Table

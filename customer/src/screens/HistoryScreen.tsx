@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { fetchPassengerRideHistory } from '../services/api';
 import { RideHistoryFilter, RideHistoryItem } from '../types/order';
+import { OrderStatus } from '../types/orderStatus';
 
 const filters: RideHistoryFilter[] = ['active', 'completed', 'cancelled'];
 
@@ -13,7 +14,10 @@ interface HistoryScreenProps {
 export function HistoryScreen({ accessToken, onBack }: HistoryScreenProps) {
   const [filter, setFilter] = useState<RideHistoryFilter>('completed');
   const [rides, setRides] = useState<RideHistoryItem[]>([]);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
@@ -22,12 +26,16 @@ export function HistoryScreen({ accessToken, onBack }: HistoryScreenProps) {
     async function loadHistory() {
       setLoading(true);
       setError(undefined);
+      setPage(1);
+      setHasMore(false);
 
       try {
-        const nextRides = await fetchPassengerRideHistory(accessToken, filter);
+        const result = await fetchPassengerRideHistory(accessToken, filter, 1, 20);
 
         if (!cancelled) {
-          setRides(nextRides);
+          setRides(result.data);
+          setPage(result.page);
+          setHasMore(result.hasMore);
         }
       } catch (nextError) {
         if (!cancelled) {
@@ -47,6 +55,25 @@ export function HistoryScreen({ accessToken, onBack }: HistoryScreenProps) {
       cancelled = true;
     };
   }, [accessToken, filter]);
+
+  async function loadMoreRides() {
+    if (loading || loadingMore || !hasMore) {
+      return;
+    }
+
+    setLoadingMore(true);
+    try {
+      const result = await fetchPassengerRideHistory(accessToken, filter, page + 1, 20);
+      setRides((current) => [...current, ...result.data]);
+      setPage(result.page);
+      setHasMore(result.hasMore);
+    } catch (nextError) {
+      console.warn(nextError);
+      setError('Не удалось загрузить следующую страницу');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   return (
     <View style={styles.screen}>
@@ -79,6 +106,11 @@ export function HistoryScreen({ accessToken, onBack }: HistoryScreenProps) {
         data={rides}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={!loading ? <Text style={styles.meta}>Поездок пока нет</Text> : null}
+        ListFooterComponent={loadingMore ? <Text style={styles.meta}>Загружаем ещё...</Text> : null}
+        onEndReached={() => {
+          void loadMoreRides();
+        }}
+        onEndReachedThreshold={0.3}
         renderItem={({ item }) => (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{item.pickup.address ?? 'Подача'}</Text>
@@ -102,12 +134,12 @@ function filterLabel(filter: RideHistoryFilter) {
 }
 
 function statusLabel(status: RideHistoryItem['status']) {
-  if (status === 'COMPLETED') return 'Завершена';
-  if (status === 'CANCELLED') return 'Отменена';
-  if (status === 'SEARCHING_DRIVER') return 'Поиск водителя';
-  if (status === 'DRIVER_ASSIGNED') return 'Водитель назначен';
-  if (status === 'DRIVER_ARRIVED') return 'Водитель на месте';
-  if (status === 'IN_PROGRESS') return 'В поездке';
+  if (status === OrderStatus.COMPLETED) return 'Завершена';
+  if (status === OrderStatus.CANCELLED) return 'Отменена';
+  if (status === OrderStatus.SEARCHING) return 'Поиск водителя';
+  if (status === OrderStatus.ACCEPTED) return 'Водитель назначен';
+  if (status === OrderStatus.ARRIVING) return 'Водитель на месте';
+  if (status === OrderStatus.IN_PROGRESS) return 'В поездке';
   return status;
 }
 

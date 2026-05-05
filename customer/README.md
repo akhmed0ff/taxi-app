@@ -5,7 +5,7 @@ Passenger mobile app built with React Native and Expo.
 ## Screens
 
 - Auth - login / registration
-- Home map - current position and A to B route selection
+- Home - dev-mode без карты/маршрутов (фиксированный pickup + mock destinations)
 - Tariff selection - economy, comfort, premium and price
 - Driver search - searching status and animation
 - Trip - map, driver, ETA, chat and call actions
@@ -22,7 +22,7 @@ Expected backend rooms:
 
 Expected events:
 
-- `NEW_ORDER`
+- `ride.new_order` / `NEW_ORDER`
 - `DRIVER_ACCEPTED`
 - `DRIVER_LOCATION`
 - `TRIP_STARTED`
@@ -34,6 +34,13 @@ Expected events:
 npm install
 npm run start
 ```
+
+## Dev-mode (без карты и маршрутов)
+
+- Управляется через `customer/src/config/flags.ts` (`FLAGS`)
+- Pickup/Destinations берутся из `customer/src/dev/devLocations.ts` через `services/locations/locationProvider.ts`
+- Маршруты выключены через `FLAGS.ENABLE_ROUTE_FETCHING=false`
+- Цена считается временно через mock distance: `services/fare/fareService.ts` → `mapAdapter.getDistance(...)`
 
 Environment variables:
 

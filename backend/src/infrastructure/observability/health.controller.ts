@@ -1,9 +1,11 @@
 import { Controller, Get } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { PrismaService } from '../db/prisma.service';
 import { MapboxService } from '../maps/mapbox.service';
 import { RedisService } from '../redis/redis.service';
 
 @Controller('health')
+@SkipThrottle()
 export class HealthController {
   constructor(
     private readonly prisma: PrismaService,

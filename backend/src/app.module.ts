@@ -1,6 +1,8 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './infrastructure/db/prisma.module';
 import { QueueModule } from './infrastructure/queue/queue.module';
 import { NotificationsModule } from './infrastructure/queue/notifications/notifications.module';
@@ -25,6 +27,16 @@ import { UserModule } from './modules/user/user.module';
         connection: createRedisOptions(config),
       }),
     }),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        void config;
+
+        return {
+          throttlers: [{ ttl: 60_000, limit: 10 }],
+        };
+      },
+    }),
     PrismaModule,
     AuthModule,
     UserModule,
@@ -38,6 +50,12 @@ import { UserModule } from './modules/user/user.module';
     QueueModule,
     NotificationsModule,
     ObservabilityModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

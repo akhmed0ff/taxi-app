@@ -1,5 +1,6 @@
 import { useCallback, useReducer } from 'react';
 import { ActiveTrip, OrderOffer } from '../types/order';
+import { OrderStatus } from '../types/orderStatus';
 
 export type DriverRideStatus =
   | 'OFFLINE'
@@ -68,7 +69,7 @@ function driverRideReducer(
         status: 'GOING_TO_PICKUP',
         trip: {
           ...action.offer,
-          status: 'ACCEPTED',
+          status: OrderStatus.ACCEPTED,
         },
       };
     case 'ARRIVED':
@@ -81,7 +82,7 @@ function driverRideReducer(
         status: 'ARRIVED',
         trip: {
           ...state.trip,
-          status: 'DRIVER_ARRIVED',
+          status: OrderStatus.ARRIVING,
         },
       };
     case 'RIDE_STARTED':
@@ -94,7 +95,7 @@ function driverRideReducer(
         status: 'RIDING',
         trip: {
           ...state.trip,
-          status: 'IN_PROGRESS',
+          status: OrderStatus.IN_PROGRESS,
         },
       };
     case 'RIDE_COMPLETED':
@@ -107,7 +108,7 @@ function driverRideReducer(
         status: 'COMPLETED',
         trip: {
           ...state.trip,
-          status: 'COMPLETED',
+          status: OrderStatus.COMPLETED,
         },
       };
     case 'BACK_ONLINE':

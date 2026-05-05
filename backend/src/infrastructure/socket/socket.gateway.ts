@@ -1,4 +1,5 @@
-import { Optional } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
@@ -37,12 +38,25 @@ const ACTIVE_RIDE_OFFER_STATUSES: string[] = [
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: (
+      origin: string | undefined,
+      callback: (error: Error | null, allow?: boolean) => void,
+    ) => {
+      if (isAllowedSocketOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
   },
 })
 export class SocketGateway implements OnGatewayConnection {
   @WebSocketServer()
   server: Server;
+
+  private readonly logger = new Logger(SocketGateway.name);
 
   constructor(
     private readonly jwt: JwtService,
@@ -213,6 +227,19 @@ export class SocketGateway implements OnGatewayConnection {
 
   emitToDriver(driverId: string, event: string, payload: unknown) {
     this.server.to(`driver:${driverId}`).emit(event, payload);
+    // Some clients may not successfully join the driver room immediately after connect.
+    // Also emit to the authenticated user room as a fallback.
+    void this.prisma.driver
+      .findUnique({ where: { id: driverId }, select: { userId: true } })
+      .then((driver) => {
+        if (driver?.userId) {
+          this.logger.log(
+            `[orders] emitting offer to driver rooms: driver:${driverId}, user:${driver.userId}`,
+          );
+          this.server.to(`user:${driver.userId}`).emit(event, payload);
+        }
+      })
+      .catch(() => undefined);
   }
 
   async emitOfferToDriverWithAck(
@@ -280,4 +307,23 @@ export class SocketGateway implements OnGatewayConnection {
 
     return false;
   }
+}
+
+export function getAllowedOrigins(configService = new ConfigService()) {
+  return configService
+    .get<string>('ALLOWED_ORIGINS', '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+export function isAllowedSocketOrigin(
+  origin: string | undefined,
+  configService = new ConfigService(),
+) {
+  if (!origin) {
+    return true;
+  }
+
+  return getAllowedOrigins(configService).includes(origin);
 }

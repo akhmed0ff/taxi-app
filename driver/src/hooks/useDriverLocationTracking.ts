@@ -1,6 +1,7 @@
-import * as Location from 'expo-location';
 import { useEffect } from 'react';
 import { updateDriverLocation } from '../services/api';
+import { FLAGS } from '../config/flags';
+import { DEV_DRIVER_COORDS } from '../dev/devLocations';
 
 interface UseDriverLocationTrackingInput {
   accessToken?: string;
@@ -26,29 +27,20 @@ export function useDriverLocationTracking({
     let timer: ReturnType<typeof setInterval> | undefined;
 
     void (async () => {
-      const permission = await Location.requestForegroundPermissionsAsync();
-
-      if (permission.status !== 'granted' || cancelled) {
-        return;
-      }
-
       const sendLocation = async () => {
-        const location = await Location.getCurrentPositionAsync({});
-
         if (cancelled) {
           return;
         }
 
         try {
-          onLocation?.({
-            lat: location.coords.latitude,
-            lng: location.coords.longitude,
-          });
+          if (FLAGS.USE_DEV_COORDS) {
+            onLocation?.(DEV_DRIVER_COORDS);
+          }
           await updateDriverLocation(
             accessToken,
             driverId,
-            location.coords.latitude,
-            location.coords.longitude,
+            FLAGS.USE_DEV_COORDS ? DEV_DRIVER_COORDS.lat : DEV_DRIVER_COORDS.lat,
+            FLAGS.USE_DEV_COORDS ? DEV_DRIVER_COORDS.lng : DEV_DRIVER_COORDS.lng,
           );
         } catch (error) {
           console.warn(error);

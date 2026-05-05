@@ -1,6 +1,3 @@
-import Mapbox from '@rnmapbox/maps';
-import { useMemo } from 'react';
-
 interface RouteLineProps {
   destinationLat: number;
   destinationLng: number;
@@ -16,36 +13,13 @@ export function RouteLine({
   pickupLng,
   routeCoordinates,
 }: RouteLineProps) {
-  const routeShape = useMemo(
-    () => ({
-      type: 'Feature' as const,
-      properties: {},
-      geometry: {
-        type: 'LineString' as const,
-        coordinates:
-          routeCoordinates && routeCoordinates.length > 1
-            ? routeCoordinates
-            : [
-                [pickupLng, pickupLat],
-                [destinationLng, destinationLat],
-              ],
-      },
-    }),
-    [destinationLat, destinationLng, pickupLat, pickupLng, routeCoordinates],
-  );
+  // RouteLine сейчас не используется в активном UI клиента.
+  // Оставляем компонент, но без Mapbox, чтобы сборка не зависела от @rnmapbox/maps.
+  void destinationLat;
+  void destinationLng;
+  void pickupLat;
+  void pickupLng;
+  void routeCoordinates;
 
-  return (
-    <Mapbox.ShapeSource id="passenger-route-source" shape={routeShape}>
-      <Mapbox.LineLayer
-        id="passenger-route-line"
-        style={{
-          lineCap: 'round',
-          lineColor: '#111111',
-          lineJoin: 'round',
-          lineOpacity: 0.78,
-          lineWidth: 5,
-        }}
-      />
-    </Mapbox.ShapeSource>
-  );
+  return null;
 }

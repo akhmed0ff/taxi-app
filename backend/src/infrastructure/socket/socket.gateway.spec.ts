@@ -1,7 +1,11 @@
 import { strict as assert } from 'node:assert';
 import { UserRoleValue } from '../../common/roles';
 import { RideOfferStatusValue } from '../../modules/matching/ride-offer-status';
-import { SocketGateway } from './socket.gateway';
+import {
+  getAllowedOrigins,
+  isAllowedSocketOrigin,
+  SocketGateway,
+} from './socket.gateway';
 
 interface TestSocket {
   handshake: {
@@ -306,6 +310,29 @@ async function testOfferEmitAckReturnsFalseOnTimeoutError() {
   );
 }
 
+function testAllowedSocketOriginUsesAllowedOrigins() {
+  const config = {
+    get: (key: string, fallback?: string) =>
+      key === 'ALLOWED_ORIGINS'
+        ? 'http://localhost:3001, https://admin.yourdomain.com'
+        : fallback,
+  };
+
+  assert.deepEqual(getAllowedOrigins(config as never), [
+    'http://localhost:3001',
+    'https://admin.yourdomain.com',
+  ]);
+  assert.equal(
+    isAllowedSocketOrigin('http://localhost:3001', config as never),
+    true,
+  );
+  assert.equal(
+    isAllowedSocketOrigin('https://evil.example', config as never),
+    false,
+  );
+  assert.equal(isAllowedSocketOrigin(undefined, config as never), true);
+}
+
 async function main() {
   await testPassengerRoomsUseJwtIdentityOnly();
   await testDriverRoomsUseDatabaseProfileFromJwtUser();
@@ -317,6 +344,7 @@ async function main() {
   await testDriverCannotRejectAnotherDriversOffer();
   await testOfferEmitAckReturnsTrueWhenDriverAcknowledges();
   await testOfferEmitAckReturnsFalseOnTimeoutError();
+  testAllowedSocketOriginUsesAllowedOrigins();
 }
 
 void main();

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
@@ -7,6 +15,7 @@ import { Roles } from '../../common/auth/roles.decorator';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { UserRoleValue } from '../../common/roles';
 import { DriverStatus } from './driver-status';
+import { PaginationDto } from './dto/pagination.dto';
 import { UpdateDriverLocationDto } from './dto/update-driver-location.dto';
 import { DriverService } from './driver.service';
 
@@ -20,8 +29,8 @@ export class DriverController {
   @Get()
   @Roles(UserRoleValue.ADMIN)
   @ApiOperation({ summary: 'List drivers' })
-  findAll() {
-    return this.driverService.findAll();
+  findAll(@Query() pagination: PaginationDto) {
+    return this.driverService.findAll(pagination);
   }
 
   @Get('online')
@@ -29,6 +38,16 @@ export class DriverController {
   @ApiOperation({ summary: 'List online drivers' })
   findOnline() {
     return this.driverService.findOnline();
+  }
+
+  @Get(':driverId/rides')
+  @Roles(UserRoleValue.ADMIN)
+  @ApiOperation({ summary: 'List driver rides' })
+  findRides(
+    @Param('driverId') driverId: string,
+    @Query() pagination: PaginationDto,
+  ) {
+    return this.driverService.findRides(driverId, pagination);
   }
 
   @Patch(':driverId/status')

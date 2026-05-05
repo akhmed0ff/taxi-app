@@ -55,6 +55,7 @@ function createHistoryMock() {
     ride: {
       findMany: async ({
         where,
+        skip,
         take,
       }: {
         where: {
@@ -62,6 +63,7 @@ function createHistoryMock() {
           driverId?: string;
           status?: { in: string[] };
         };
+        skip?: number;
         take?: number;
       }) =>
         rides
@@ -81,7 +83,31 @@ function createHistoryMock() {
             return true;
           })
           .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
-          .slice(0, take ?? 50),
+          .slice(skip ?? 0, (skip ?? 0) + (take ?? 50)),
+      count: async ({
+        where,
+      }: {
+        where: {
+          customerId?: string;
+          driverId?: string;
+          status?: { in: string[] };
+        };
+      }) =>
+        rides.filter((ride) => {
+          if (where.customerId && ride.customerId !== where.customerId) {
+            return false;
+          }
+
+          if (where.driverId && ride.driverId !== where.driverId) {
+            return false;
+          }
+
+          if (where.status && !where.status.in.includes(ride.status)) {
+            return false;
+          }
+
+          return true;
+        }).length,
     },
     driver: {
       findUnique: async ({
@@ -118,6 +144,7 @@ async function main() {
   await testPassengerHistoryCompletedFilter();
   await testPassengerHistoryCancelledFilter();
   await testDriverHistoryCompletedFilter();
+  await testPassengerHistoryPaginationSlice();
   await testUnknownDriverHistoryFails();
 }
 
@@ -130,7 +157,7 @@ async function testPassengerHistoryActiveFilter() {
   );
 
   assert.deepEqual(
-    history.map((ride) => ride.id),
+    history.data.map((ride) => ride.id),
     ['ride-active-progress', 'ride-active-searching'],
   );
 }
@@ -144,7 +171,7 @@ async function testPassengerHistoryCompletedFilter() {
   );
 
   assert.deepEqual(
-    history.map((ride) => ride.id),
+    history.data.map((ride) => ride.id),
     ['ride-completed'],
   );
 }
@@ -158,7 +185,7 @@ async function testPassengerHistoryCancelledFilter() {
   );
 
   assert.deepEqual(
-    history.map((ride) => ride.id),
+    history.data.map((ride) => ride.id),
     ['ride-cancelled'],
   );
 }
@@ -172,9 +199,75 @@ async function testDriverHistoryCompletedFilter() {
   );
 
   assert.deepEqual(
-    history.map((ride) => ride.id),
+    history.data.map((ride) => ride.id),
     ['ride-completed'],
   );
+}
+
+async function testPassengerHistoryPaginationSlice() {
+  const rides: HistoryRide[] = Array.from({ length: 12 }, (_, index) => ({
+    id: `ride-${index + 1}`,
+    customerId: 'passenger-1',
+    driverId: 'driver-1',
+    status: OrderStatusValue.COMPLETED,
+    createdAt: new Date(`2026-04-29T${String(index).padStart(2, '0')}:00:00.000Z`),
+  }));
+  const prisma = {
+    ride: {
+      findMany: async ({
+        where,
+        skip,
+        take,
+      }: {
+        where: { customerId?: string; status?: { in: string[] } };
+        skip?: number;
+        take?: number;
+      }) =>
+        rides
+          .filter((ride) => {
+            if (where.customerId && ride.customerId !== where.customerId) {
+              return false;
+            }
+            if (where.status && !where.status.in.includes(ride.status)) {
+              return false;
+            }
+            return true;
+          })
+          .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+          .slice(skip ?? 0, (skip ?? 0) + (take ?? 50)),
+      count: async () => rides.length,
+    },
+    driver: {
+      findUnique: async () => ({ id: 'driver-1' }),
+    },
+  };
+  const noop = {};
+  const service = new OrderService(
+    prisma as never,
+    noop as never,
+    noop as never,
+    noop as never,
+    noop as never,
+    noop as never,
+  );
+  const history = await service.findPassengerHistory(
+    { userId: 'passenger-1', role: UserRoleValue.PASSENGER },
+    'completed',
+    2,
+    5,
+  );
+
+  assert.deepEqual(history.data.map((ride) => ride.id), [
+    'ride-7',
+    'ride-6',
+    'ride-5',
+    'ride-4',
+    'ride-3',
+  ]);
+  assert.equal(history.page, 2);
+  assert.equal(history.limit, 5);
+  assert.equal(history.total, 12);
+  assert.equal(history.hasMore, true);
 }
 
 async function testUnknownDriverHistoryFails() {

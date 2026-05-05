@@ -6,7 +6,7 @@ import { PaymentMethodValue } from '../payment/payment-method';
 import { PaymentStatusValue } from '../payment/payment-status';
 import { RealtimeEvent } from '../../common/realtime-events';
 import { RideOfferStatusValue } from '../matching/ride-offer-status';
-import { OrderService } from './order.service';
+import { estimateEtaMinutes, OrderService } from './order.service';
 import { OrderStatusValue } from './order-status';
 
 interface RideState {
@@ -405,12 +405,20 @@ function createCoreFlowMock() {
     },
   };
 
+  const matching = {
+    offerRideToNearbyDrivers: async () => ({
+      offeredDrivers: 0,
+      shouldContinueSearch: false,
+    }),
+  };
+
   const service = new OrderService(
     prisma as never,
     paymentService as never,
     pricingService as never,
     redis as never,
     socket as never,
+    matching as never,
     queue as never,
   );
 
@@ -418,6 +426,7 @@ function createCoreFlowMock() {
 }
 
 async function main() {
+  testEstimateEtaMinutes();
   await testLifecycleCreatesPendingPayment();
   await testAcceptRequiresActiveRideOffer();
   await testAcceptRejectsExpiredRideOffer();
@@ -429,6 +438,10 @@ async function main() {
   await testDriverCannotCancelAnotherRide();
   await testCompletedRideCannotBeCancelled();
   await testCancelledRideCannotBeCancelledAgain();
+}
+
+function testEstimateEtaMinutes() {
+  assert.equal(estimateEtaMinutes(2500), 6);
 }
 
 async function testLifecycleCreatesPendingPayment() {
@@ -586,6 +599,10 @@ async function testAcceptRejectsExpiredRideOffer() {
     (error) =>
       error instanceof BadRequestException &&
       /Ride offer expired/.test(error.message),
+  );
+  assert.equal(
+    state.rideOffers.get(offerKey)?.status,
+    RideOfferStatusValue.EXPIRED,
   );
   assert.equal(state.rides.get(createdRide.id)?.status, OrderStatusValue.SEARCHING_DRIVER);
   assert.equal(state.drivers.get('driver-1')?.status, DriverStatusValue.ONLINE);

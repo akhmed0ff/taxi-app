@@ -1,9 +1,5 @@
-import {
-  DriverStatus,
-  RideHistoryFilter,
-  RideHistoryItem,
-  TripStatus,
-} from '../types/order';
+import { DriverStatus, RideHistoryFilter, RideHistoryItem } from '../types/order';
+import { normalizeOrderStatus } from '../types/orderStatus';
 import {
   authorizedFetch,
   clearDriverSession,
@@ -34,6 +30,14 @@ interface FetchRouteParams {
   destinationLng: number;
   pickupLat: number;
   pickupLng: number;
+}
+
+export interface PaginatedDriverRideHistory {
+  data: RideHistoryItem[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
 }
 
 interface AuthResponse {
@@ -238,9 +242,11 @@ export async function cancelOrder(
 export async function fetchDriverRideHistory(
   accessToken: string,
   filter: RideHistoryFilter = 'completed',
-): Promise<RideHistoryItem[]> {
+  page = 1,
+  limit = 20,
+): Promise<PaginatedDriverRideHistory> {
   const response = await authorizedFetch(
-    `/orders/history/driver?filter=${filter}`,
+    `/orders/history/driver?filter=${filter}&page=${page}&limit=${limit}`,
     {},
     accessToken,
   );
@@ -249,13 +255,23 @@ export async function fetchDriverRideHistory(
     throw new Error(await readError(response, 'Failed to load driver history'));
   }
 
-  const rides = (await response.json()) as BackendRide[];
-  return rides.map(mapBackendRideToHistoryItem);
+  const payload = (await response.json()) as {
+    data: BackendRide[];
+    total: number;
+    page: number;
+    limit: number;
+    hasMore: boolean;
+  };
+
+  return {
+    ...payload,
+    data: payload.data.map(mapBackendRideToHistoryItem),
+  };
 }
 
 interface BackendRide {
   id: string;
-  status: TripStatus | 'DRIVER_ASSIGNED' | 'SEARCHING_DRIVER' | 'CANCELLED';
+  status: string;
   pickupLat: number;
   pickupLng: number;
   pickupAddress?: string;
@@ -291,23 +307,11 @@ function mapBackendRideToHistoryItem(ride: BackendRide): RideHistoryItem {
     price: ride.finalFare ?? ride.estimatedFare ?? 0,
     distanceMeters: ride.distanceMeters ?? 0,
     expiresInSeconds: 0,
-    status: normalizeTripStatus(ride.status),
+    status: normalizeOrderStatus(ride.status),
     createdAt: ride.createdAt,
     passengerName: ride.customer?.name ?? ride.customer?.phone,
     paymentStatus: ride.payment?.status,
   };
-}
-
-function normalizeTripStatus(status: BackendRide['status']): RideHistoryItem['status'] {
-  if (status === 'DRIVER_ASSIGNED') {
-    return 'ACCEPTED';
-  }
-
-  if (status === 'SEARCHING_DRIVER') {
-    return 'OFFERED';
-  }
-
-  return status;
 }
 
 async function readError(response: Response, fallback: string) {

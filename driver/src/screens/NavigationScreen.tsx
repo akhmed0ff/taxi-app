@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { DriverMapboxMap } from '../components/map';
+import { FakeDriverMap } from '../components/FakeDriverMap';
 import { t } from '../i18n';
 import { ActiveTrip, Coords } from '../types/order';
 
@@ -15,13 +15,7 @@ export function NavigationScreen({ driverPosition, onArrived, onCancel, trip }: 
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
-        <DriverMapboxMap
-          destination={trip.dropoff}
-          driverPosition={driverPosition}
-          pickup={trip.pickup}
-          showToDestinationRoute
-          showToPickupRoute
-        />
+        <FakeDriverMap destination={trip.dropoff} driverPosition={driverPosition} pickup={trip.pickup} />
         <View style={styles.mapBadge}>
           <Feather color="#14532d" name="map-pin" size={22} />
           <Text style={styles.mapTitle}>{t('navigation')}</Text>

@@ -11,6 +11,7 @@ import { PrismaService } from '../../infrastructure/db/prisma.service';
 import { RealtimeEvent } from '../../common/realtime-events';
 import { SocketGateway } from '../../infrastructure/socket/socket.gateway';
 import { OrderStatusValue } from '../order/order-status';
+import { PaginationDto } from './dto/pagination.dto';
 import { DriverStatus, DriverStatusValue } from './driver-status';
 
 @Injectable()
@@ -21,19 +22,30 @@ export class DriverService {
     private readonly socket: SocketGateway,
   ) {}
 
-  findAll() {
-    return this.prisma.driver.findMany({
-      include: {
-        user: true,
-        vehicle: true,
-        documents: true,
-        rides: {
-          orderBy: { createdAt: 'desc' },
-          take: 25,
+  async findAll(pagination: PaginationDto) {
+    const { page, limit } = pagination;
+    const skip = (page - 1) * limit;
+    const [drivers, total] = await Promise.all([
+      this.prisma.driver.findMany({
+        skip,
+        take: limit,
+        include: {
+          user: true,
+          vehicle: true,
+          documents: true,
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.driver.count(),
+    ]);
+
+    return {
+      data: drivers,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   findOnline() {
@@ -41,6 +53,28 @@ export class DriverService {
       where: { status: DriverStatusValue.ONLINE },
       include: { user: true, vehicle: true },
     });
+  }
+
+  async findRides(driverId: string, pagination: PaginationDto) {
+    const { page, limit } = pagination;
+    const skip = (page - 1) * limit;
+    const [rides, total] = await Promise.all([
+      this.prisma.ride.findMany({
+        where: { driverId },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.ride.count({ where: { driverId } }),
+    ]);
+
+    return {
+      data: rides,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async updateStatus(driverId: string, status: DriverStatus, user?: AuthUser) {

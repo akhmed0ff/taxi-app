@@ -1,27 +1,46 @@
 import { ReactNode } from 'react';
 import { Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 
+function formatSeatsRu(count: number): string {
+  const n = Math.max(1, Math.trunc(count) || 4);
+  const v = n % 100;
+  if (v >= 11 && v <= 14) {
+    return `${n} мест`;
+  }
+  const last = n % 10;
+  if (last === 1) {
+    return `${n} место`;
+  }
+  if (last >= 2 && last <= 4) {
+    return `${n} места`;
+  }
+  return `${n} мест`;
+}
+
 interface TariffCardProps {
-  description?: string;
-  eta?: string;
+  etaMinutes: number;
   icon?: ReactNode;
   onPress?: () => void;
   price: string;
+  seats: number;
   selected?: boolean;
   style?: StyleProp<ViewStyle>;
   title: string;
 }
 
 export function TariffCard({
-  description,
-  eta,
+  etaMinutes,
   icon,
   onPress,
   price,
+  seats,
   selected = false,
   style,
   title,
 }: TariffCardProps) {
+  const seatsText = formatSeatsRu(seats);
+  const etaText = `≈ ${etaMinutes} мин`;
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -33,25 +52,22 @@ export function TariffCard({
         style,
       ]}
     >
-      <View style={[styles.iconWrap, selected && styles.selectedIconWrap]}>
-        {icon}
-      </View>
+      <View style={[styles.iconWrap, selected && styles.selectedIconWrap]}>{icon}</View>
 
       <View style={styles.content}>
         <View style={styles.header}>
           <Text numberOfLines={1} style={styles.title}>
             {title}
           </Text>
-          <Text style={styles.price}>{price}</Text>
         </View>
-        <View style={styles.metaRow}>
-          {description ? (
-            <Text numberOfLines={1} style={styles.description}>
-              {description}
-            </Text>
-          ) : null}
-          {eta ? <Text style={styles.eta}>{eta}</Text> : null}
-        </View>
+        <Text numberOfLines={1} style={styles.meta}>
+          {seatsText}
+          <Text style={styles.metaDot}> · </Text>
+          {etaText}
+        </Text>
+        <Text numberOfLines={1} style={styles.price}>
+          {price}
+        </Text>
       </View>
     </Pressable>
   );
@@ -59,11 +75,11 @@ export function TariffCard({
 
 const styles = StyleSheet.create({
   card: {
-    minHeight: 88,
+    minHeight: 96,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.82)',
     borderRadius: 24,
     padding: 14,
@@ -76,10 +92,10 @@ const styles = StyleSheet.create({
   },
   selected: {
     borderColor: '#FFD400',
-    backgroundColor: 'rgba(255, 249, 210, 0.92)',
+    backgroundColor: 'rgba(255, 249, 210, 0.95)',
   },
   pressed: {
-    opacity: 0.9,
+    opacity: 0.92,
     transform: [{ scale: 0.99 }],
   },
   iconWrap: {
@@ -96,12 +112,13 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     minWidth: 0,
+    gap: 4,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 8,
   },
   title: {
     flex: 1,
@@ -109,26 +126,19 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '900',
   },
-  price: {
-    color: '#111111',
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  metaRow: {
-    marginTop: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  description: {
-    flex: 1,
+  meta: {
     color: '#667085',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
-  eta: {
+  metaDot: {
+    color: '#98A2B3',
+    fontWeight: '700',
+  },
+  price: {
+    marginTop: 2,
     color: '#111111',
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '900',
   },
 });

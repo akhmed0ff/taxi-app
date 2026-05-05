@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert';
+import { pbkdf2Sync, randomBytes } from 'node:crypto';
 import {
   ConflictException,
   ForbiddenException,
@@ -264,6 +265,31 @@ async function testRegisterLoginRefreshLogout() {
   );
 }
 
+async function testLegacyPbkdf2PasswordMigratesToBcryptOnLogin() {
+  const { service, state } = createAuthMock();
+  const legacyHash = createLegacyPbkdf2Hash('password123');
+  state.users.set('legacy-user', {
+    id: 'legacy-user',
+    phone: '+998900008888',
+    passwordHash: legacyHash,
+    role: UserRoleValue.PASSENGER,
+  });
+
+  const loggedIn = await service.login({
+    phone: '+998900008888',
+    password: 'password123',
+  });
+  const migratedUser = state.users.get('legacy-user');
+
+  assert.ok(loggedIn.accessToken);
+  assert.ok(migratedUser?.passwordHash);
+  assert.ok(migratedUser.passwordHash.startsWith('$2'));
+  assert.equal(
+    await bcrypt.compare('password123', migratedUser.passwordHash),
+    true,
+  );
+}
+
 async function testExpiredRefreshTokenFails() {
   const { service, state } = createAuthMock();
   const registered = await service.register({
@@ -404,6 +430,7 @@ async function testRegisterCreatesDriverProfile() {
 
 async function main() {
   await testRegisterLoginRefreshLogout();
+  await testLegacyPbkdf2PasswordMigratesToBcryptOnLogin();
   await testExpiredRefreshTokenFails();
   await testLogoutRevokesRefreshToken();
   await testRegisterRejectsDuplicatePhone();
@@ -411,6 +438,15 @@ async function main() {
   await testDevLoginRequiresExplicitFlagOutsideProduction();
   await testDevLoginDisabledInProduction();
   await testRegisterCreatesDriverProfile();
+}
+
+function createLegacyPbkdf2Hash(password: string) {
+  const digest = 'sha256';
+  const iterations = 100_000;
+  const salt = randomBytes(16).toString('hex');
+  const key = pbkdf2Sync(password, salt, iterations, 32, digest).toString('hex');
+
+  return `pbkdf2$${digest}$${iterations}$${salt}$${key}`;
 }
 
 function findUser(

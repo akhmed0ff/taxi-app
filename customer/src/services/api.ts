@@ -7,6 +7,7 @@ import {
   TariffClass,
   FareBreakdown,
 } from '../types/order';
+import { normalizeOrderStatus } from '../types/orderStatus';
 import {
   authorizedFetch,
   clearCustomerSession,
@@ -15,10 +16,17 @@ import {
   saveCustomerSession,
 } from '../api/client';
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').replace(
-  /\/+$/,
-  '',
-);
+function getApiUrl() {
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+
+  if (!apiUrl) {
+    throw new Error(
+      'EXPO_PUBLIC_API_URL is not configured. Add EXPO_PUBLIC_API_URL to customer/.env and restart with npx expo start -c.',
+    );
+  }
+
+  return apiUrl.replace(/\/+$/, '');
+}
 
 export type CustomerSession = CustomerDevSession;
 
@@ -47,6 +55,41 @@ export interface ReverseGeocodeResult {
   fullAddress: string;
 }
 
+export interface Tariff {
+  tariffClass: TariffClass;
+  minimumFare: number;
+  perKm: number;
+  baseFare: number;
+  /** Бесплатные минуты ожидания из тарифа (настраивается в админке / БД). */
+  freeWaitingMinutes?: number;
+}
+
+/** Публичный тариф (GET /tariffs): цены и ETA из конфигурации backend/admin. */
+export interface PublicTariff {
+  id: string;
+  code: TariffClass;
+  title: string;
+  isActive: boolean;
+  sortOrder: number;
+  baseFare: number;
+  pricePerKm: number;
+  pricePer100m?: number;
+  etaMinutes: number;
+  seats: number;
+  minimumFare: number;
+  freeWaitingMinutes: number;
+  waitingPerMinute: number;
+  stopPerMinute: number;
+}
+
+export interface PaginatedRideHistory {
+  data: RideHistoryItem[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
 export function isNetworkError(error: unknown) {
   if (!(error instanceof Error)) {
     return false;
@@ -73,7 +116,10 @@ export interface CreateOrderInput {
   customerId: string;
   pickup: Point;
   dropoff: Point;
+  /** Класс тарифа (как в backend tariffClass). */
   tariff: TariffClass;
+  /** Id строки тарифа из GET /tariffs (опционально, для согласованности с админ-конфигом). */
+  tariffId?: string;
 }
 
 interface BackendRide {
@@ -108,7 +154,7 @@ export async function ensurePassengerDevSession(): Promise<CustomerSession> {
 export async function refreshPassengerSession(
   refreshToken: string,
 ): Promise<CustomerSession> {
-  const response = await fetch(`${API_URL}/auth/refresh`, {
+  const response = await fetch(`${getApiUrl()}/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refreshToken }),
@@ -128,7 +174,7 @@ export async function refreshPassengerSession(
 }
 
 export async function logoutPassenger(refreshToken: string) {
-  const response = await fetch(`${API_URL}/auth/logout`, {
+  const response = await fetch(`${getApiUrl()}/auth/logout`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refreshToken }),
@@ -144,31 +190,39 @@ export async function logoutPassenger(refreshToken: string) {
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
-  const response = await authorizedFetch('/orders', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  const body: Record<string, unknown> = {
+    customerId: input.customerId,
+    pickupLat: input.pickup.lat,
+    pickupLng: input.pickup.lng,
+    pickupAddress: input.pickup.address,
+    dropoffLat: input.dropoff.lat,
+    dropoffLng: input.dropoff.lng,
+    dropoffAddress: input.dropoff.address,
+    tariffClass: input.tariff,
+  };
+
+  if (input.tariffId) {
+    body.tariffId = input.tariffId;
+  }
+
+  const response = await authorizedFetch(
+    '/orders',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify({
-      customerId: input.customerId,
-      pickupLat: input.pickup.lat,
-      pickupLng: input.pickup.lng,
-      destinationLat: input.dropoff.lat,
-      destinationLng: input.dropoff.lng,
-      pickupAddress: input.pickup.address,
-      dropoffLat: input.dropoff.lat,
-      dropoffLng: input.dropoff.lng,
-      dropoffAddress: input.dropoff.address,
-      class: input.tariff,
-      tariffClass: input.tariff,
-    }),
-  }, input.accessToken);
+    input.accessToken,
+  );
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to create order'));
   }
 
-  return mapRideToOrder(await response.json(), input.tariff);
+  const ride = (await response.json()) as BackendRide;
+  return mapRideToOrder(ride, input.tariff);
 }
 
 export async function cancelOrder(
@@ -191,32 +245,59 @@ export async function cancelOrder(
   return response.json();
 }
 
+export async function rateRide(
+  accessToken: string,
+  rideId: string,
+  rating: 1 | 2 | 3 | 4 | 5,
+) {
+  const response = await authorizedFetch(`/orders/${rideId}/rate`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ rating }),
+  }, accessToken);
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to rate ride'));
+  }
+
+  return response.json();
+}
+
 export async function fetchRoute(input: {
   destinationLat: number;
   destinationLng: number;
   pickupLat: number;
   pickupLng: number;
-}): Promise<RouteResponse> {
-  const params = new URLSearchParams({
-    destinationLat: String(input.destinationLat),
-    destinationLng: String(input.destinationLng),
-    pickupLat: String(input.pickupLat),
-    pickupLng: String(input.pickupLng),
-  });
-  const response = await fetch(`${API_URL}/maps/route?${params.toString()}`);
+}): Promise<RouteResponse | null> {
+  try {
+    const params = new URLSearchParams({
+      destinationLat: String(input.destinationLat),
+      destinationLng: String(input.destinationLng),
+      pickupLat: String(input.pickupLat),
+      pickupLng: String(input.pickupLng),
+    });
+    const base = getApiUrl();
+    const response = await fetch(`${base}/maps/route?${params.toString()}`);
 
-  if (!response.ok) {
-    throw new Error(await readError(response, 'Failed to fetch route'));
+    if (!response.ok) {
+      console.warn('[fetchRoute] /maps/route failed:', response.status);
+      return null;
+    }
+
+    return (await response.json()) as RouteResponse;
+  } catch (error) {
+    console.warn('[fetchRoute] /maps/route error:', error);
+    return null;
   }
-
-  return response.json() as Promise<RouteResponse>;
 }
 
 export async function searchDestinationAddresses(
   query: string,
 ): Promise<DestinationSearchResult[]> {
   const params = new URLSearchParams({ q: query });
-  const response = await fetch(`${API_URL}/maps/search?${params.toString()}`);
+  const response = await fetch(`${getApiUrl()}/maps/search?${params.toString()}`);
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to search destination'));
@@ -233,7 +314,7 @@ export async function reverseGeocodePickup(input: {
     lat: String(input.lat),
     lng: String(input.lng),
   });
-  const response = await fetch(`${API_URL}/maps/reverse?${params.toString()}`);
+  const response = await fetch(`${getApiUrl()}/maps/reverse?${params.toString()}`);
 
   if (!response.ok) {
     throw new Error(await readError(response, 'Failed to reverse geocode pickup'));
@@ -242,12 +323,34 @@ export async function reverseGeocodePickup(input: {
   return response.json() as Promise<ReverseGeocodeResult>;
 }
 
+export async function fetchTariffs(): Promise<Tariff[]> {
+  const response = await fetch(`${getApiUrl()}/pricing/tariffs`);
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to fetch tariffs'));
+  }
+
+  return response.json() as Promise<Tariff[]>;
+}
+
+export async function getTariffs(): Promise<PublicTariff[]> {
+  const response = await fetch(`${getApiUrl()}/tariffs`);
+
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to fetch tariffs'));
+  }
+
+  return response.json() as Promise<PublicTariff[]>;
+}
+
 export async function fetchPassengerRideHistory(
   accessToken: string,
   filter: RideHistoryFilter,
-): Promise<RideHistoryItem[]> {
+  page = 1,
+  limit = 20,
+): Promise<PaginatedRideHistory> {
   const response = await authorizedFetch(
-    `/orders/history/passenger?filter=${filter}`,
+    `/orders/history/passenger?filter=${filter}&page=${page}&limit=${limit}`,
     {},
     accessToken,
   );
@@ -256,17 +359,29 @@ export async function fetchPassengerRideHistory(
     throw new Error(await readError(response, 'Failed to load ride history'));
   }
 
-  const rides = (await response.json()) as BackendRide[];
-  return rides.map((ride) => mapRideToHistoryItem(ride));
+  const payload = (await response.json()) as {
+    data: BackendRide[];
+    total: number;
+    page: number;
+    limit: number;
+    hasMore: boolean;
+  };
+
+  return {
+    ...payload,
+    data: payload.data.map((ride) => mapRideToHistoryItem(ride)),
+  };
 }
 
 export function mapRideToOrder(
   ride: BackendRide,
-  tariff: TariffClass = 'STANDARD',
+  fallbackTariff: TariffClass = 'STANDARD',
 ): Order {
+  const tariff = ride.tariffClass ?? fallbackTariff;
+
   return {
     id: ride.id,
-    status: ride.status,
+    status: normalizeOrderStatus(String(ride.status)),
     pickup: {
       lat: ride.pickupLat,
       lng: ride.pickupLng,

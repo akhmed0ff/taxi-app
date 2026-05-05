@@ -33,8 +33,6 @@ function createMatchingMock() {
       { driverId: 'driver-blocked', distanceMeters: 220 },
     ],
     emitted: [] as Array<{ driverId: string; event: string; payload: unknown }>,
-    offerAcks: new Map<string, boolean>(),
-    redisRejectedOffers: [] as Array<{ rideId: string; driverId: string }>,
     offers: [] as Array<{
       rideId: string;
       driverId: string;
@@ -150,14 +148,6 @@ function createMatchingMock() {
     findNearbyDrivers: async () => state.geoDrivers,
   };
   const socket = {
-    emitOfferToDriverWithAck: async (
-      driverId: string,
-      payload: unknown,
-      _timeoutMs: number,
-    ) => {
-      state.emitted.push({ driverId, event: RealtimeEvent.RIDE_OFFER, payload });
-      return state.offerAcks.get(driverId) ?? true;
-    },
     emitToDriver: (driverId: string, event: string, payload: unknown) =>
       state.emitted.push({ driverId, event, payload }),
     emitToPassenger: (driverId: string, event: string, payload: unknown) =>
@@ -169,9 +159,6 @@ function createMatchingMock() {
   };
   const redis = {
     createRideOffer: async () => undefined,
-    rejectRideOffer: async (rideId: string, driverId: string) => {
-      state.redisRejectedOffers.push({ rideId, driverId });
-    },
   };
   const service = new MatchingService(
     prisma as never,
@@ -194,29 +181,52 @@ async function testOnlyOnlineDriversReceiveOffers() {
   });
 
   assert.equal(result.offeredDrivers, 1);
-  assert.equal(state.emitted.length, 3);
+  assert.equal(state.emitted.length, 1);
   assert.equal(state.offers.length, 1);
-  assert.equal(state.offers[0].status, RideOfferStatusValue.ACKED);
+  assert.equal(state.offers[0].status, RideOfferStatusValue.SENT);
   assert.equal(state.offers[0].distanceMeters, 240);
   assert.deepEqual(
     state.emitted.map((event) => event.driverId),
-    ['driver-online', 'driver-online', 'driver-online'],
+    ['driver-online'],
   );
   assert.deepEqual(
     state.emitted.map((event) => event.event),
-    [
-      RealtimeEvent.RIDE_OFFER,
-      RealtimeEvent.NEW_ORDER,
-      RealtimeEvent.NEW_RIDE_OFFER_LOWER,
-    ],
+    [RealtimeEvent.NEW_RIDE_OFFER_LOWER],
   );
   assert.equal(
     (state.emitted[0].payload as { expiresInSeconds: number }).expiresInSeconds,
     10,
   );
-  assert.equal(
-    (state.emitted[1].payload as { expiresInSeconds: number }).expiresInSeconds,
-    10,
+}
+
+async function testMatchingEmitsExactlyOncePerDriver() {
+  const { service, state } = createMatchingMock();
+  state.drivers = Array.from({ length: 3 }, (_, index) => ({
+    id: `driver-${index + 1}`,
+    status: DriverStatusValue.ONLINE,
+  }));
+  state.geoDrivers = Array.from({ length: 3 }, (_, index) => ({
+    driverId: `driver-${index + 1}`,
+    distanceMeters: (index + 1) * 100,
+  }));
+
+  const result = await service.offerRideToNearbyDrivers({
+    rideId: 'ride-1',
+    pickupLat: 41.0167,
+    pickupLng: 70.1436,
+    radiusKm: INITIAL_RADIUS_KM,
+    offerTimeoutMs: OFFER_TIMEOUT_MS,
+  });
+
+  assert.equal(result.offeredDrivers, 3);
+  assert.equal(state.emitted.length, 3);
+  assert.deepEqual(
+    state.emitted.map((event) => event.event),
+    [
+      RealtimeEvent.NEW_RIDE_OFFER_LOWER,
+      RealtimeEvent.NEW_RIDE_OFFER_LOWER,
+      RealtimeEvent.NEW_RIDE_OFFER_LOWER,
+    ],
   );
 }
 
@@ -264,20 +274,14 @@ async function testOfferTimeoutSchedulesNextSearchAttempt() {
 
 async function testOffersOnlyFirstBatchOfOnlineDrivers() {
   const { service, state } = createMatchingMock();
-  state.drivers = [
-    { id: 'driver-1', status: DriverStatusValue.ONLINE },
-    { id: 'driver-2', status: DriverStatusValue.ONLINE },
-    { id: 'driver-3', status: DriverStatusValue.ONLINE },
-    { id: 'driver-4', status: DriverStatusValue.ONLINE },
-    { id: 'driver-5', status: DriverStatusValue.ONLINE },
-  ];
-  state.geoDrivers = [
-    { driverId: 'driver-1', distanceMeters: 100 },
-    { driverId: 'driver-2', distanceMeters: 200 },
-    { driverId: 'driver-3', distanceMeters: 300 },
-    { driverId: 'driver-4', distanceMeters: 400 },
-    { driverId: 'driver-5', distanceMeters: 500 },
-  ];
+  state.drivers = Array.from({ length: 10 }, (_, index) => ({
+    id: `driver-${index + 1}`,
+    status: DriverStatusValue.ONLINE,
+  }));
+  state.geoDrivers = Array.from({ length: 10 }, (_, index) => ({
+    driverId: `driver-${index + 1}`,
+    distanceMeters: (index + 1) * 100,
+  }));
 
   const result = await service.offerRideToNearbyDrivers({
     rideId: 'ride-1',
@@ -294,54 +298,33 @@ async function testOffersOnlyFirstBatchOfOnlineDrivers() {
   );
   assert.deepEqual(
     state.emitted
-      .filter((event) => event.event === RealtimeEvent.RIDE_OFFER)
+      .filter((event) => event.event === RealtimeEvent.NEW_RIDE_OFFER_LOWER)
       .map((event) => event.driverId),
     ['driver-1', 'driver-2', 'driver-3'],
   );
 }
 
-async function testSkipsDriversAlreadyOfferedAndKeepsDistanceOrder() {
+async function testNextAttemptSkipsPreviousBatchAndOffersNextBatch() {
   const { service, state } = createMatchingMock();
-  state.drivers = [
-    { id: 'driver-1', status: DriverStatusValue.ONLINE },
-    { id: 'driver-2', status: DriverStatusValue.ONLINE },
-    { id: 'driver-3', status: DriverStatusValue.ONLINE },
-    { id: 'driver-4', status: DriverStatusValue.ONLINE },
-    { id: 'driver-5', status: DriverStatusValue.ONLINE },
-    { id: 'driver-6', status: DriverStatusValue.ONLINE },
-    { id: 'driver-7', status: DriverStatusValue.ONLINE },
-  ];
-  state.geoDrivers = [
-    { driverId: 'driver-1', distanceMeters: 100 },
-    { driverId: 'driver-2', distanceMeters: 200 },
-    { driverId: 'driver-3', distanceMeters: 300 },
-    { driverId: 'driver-4', distanceMeters: 400 },
-    { driverId: 'driver-5', distanceMeters: 500 },
-    { driverId: 'driver-6', distanceMeters: 600 },
-    { driverId: 'driver-7', distanceMeters: 700 },
-  ];
-  state.offers.push(
-    {
-      rideId: 'ride-1',
-      driverId: 'driver-1',
-      status: RideOfferStatusValue.SENT,
-      expiresAt: new Date(Date.now() + 60_000),
-    },
-    {
-      rideId: 'ride-1',
-      driverId: 'driver-2',
-      status: RideOfferStatusValue.SENT,
-      expiresAt: new Date(Date.now() + 60_000),
-    },
-    {
-      rideId: 'ride-1',
-      driverId: 'driver-3',
-      status: RideOfferStatusValue.SENT,
-      expiresAt: new Date(Date.now() + 60_000),
-    },
-  );
+  state.drivers = Array.from({ length: 10 }, (_, index) => ({
+    id: `driver-${index + 1}`,
+    status: DriverStatusValue.ONLINE,
+  }));
+  state.geoDrivers = Array.from({ length: 10 }, (_, index) => ({
+    driverId: `driver-${index + 1}`,
+    distanceMeters: (index + 1) * 100,
+  }));
 
-  const result = await service.offerRideToNearbyDrivers({
+  const firstResult = await service.offerRideToNearbyDrivers({
+    rideId: 'ride-1',
+    pickupLat: 41.0167,
+    pickupLng: 70.1436,
+    radiusKm: INITIAL_RADIUS_KM,
+    offerTimeoutMs: OFFER_TIMEOUT_MS,
+  });
+  state.emitted = [];
+
+  const secondResult = await service.offerRideToNearbyDrivers({
     rideId: 'ride-1',
     pickupLat: 41.0167,
     pickupLng: 70.1436,
@@ -349,16 +332,24 @@ async function testSkipsDriversAlreadyOfferedAndKeepsDistanceOrder() {
     offerTimeoutMs: OFFER_TIMEOUT_MS,
   });
 
-  assert.equal(result.offeredDrivers, 3);
+  assert.equal(firstResult.offeredDrivers, 3);
+  assert.equal(secondResult.offeredDrivers, 3);
   assert.deepEqual(
     state.emitted
-      .filter((event) => event.event === RealtimeEvent.RIDE_OFFER)
+      .filter((event) => event.event === RealtimeEvent.NEW_RIDE_OFFER_LOWER)
       .map((event) => event.driverId),
     ['driver-4', 'driver-5', 'driver-6'],
   );
   assert.deepEqual(
     state.offers.map((offer) => offer.driverId),
-    ['driver-1', 'driver-2', 'driver-3', 'driver-4', 'driver-5', 'driver-6'],
+    [
+      'driver-1',
+      'driver-2',
+      'driver-3',
+      'driver-4',
+      'driver-5',
+      'driver-6',
+    ],
   );
 }
 
@@ -383,31 +374,6 @@ async function testNoRepeatedOfferStillContinuesSearch() {
   assert.equal(result.shouldContinueSearch, true);
   assert.equal(state.emitted.length, 0);
   assert.equal(state.offers.length, 1);
-}
-
-async function testDeliveryFailureMarksOfferAndDeletesRedisOffer() {
-  const { service, state } = createMatchingMock();
-  state.offerAcks.set('driver-online', false);
-
-  const result = await service.offerRideToNearbyDrivers({
-    rideId: 'ride-1',
-    pickupLat: 41.0167,
-    pickupLng: 70.1436,
-    radiusKm: INITIAL_RADIUS_KM,
-    offerTimeoutMs: OFFER_TIMEOUT_MS,
-  });
-
-  assert.equal(result.offeredDrivers, 0);
-  assert.equal(result.shouldContinueSearch, true);
-  assert.equal(state.offers.length, 1);
-  assert.equal(state.offers[0].status, RideOfferStatusValue.DELIVERY_FAILED);
-  assert.deepEqual(state.redisRejectedOffers, [
-    { rideId: 'ride-1', driverId: 'driver-online' },
-  ]);
-  assert.deepEqual(
-    state.emitted.map((event) => event.event),
-    [RealtimeEvent.RIDE_OFFER],
-  );
 }
 
 async function testNoDriverAfterMaxAttemptsCancelsRide() {
@@ -442,10 +408,10 @@ async function testNoDriverAfterMaxAttemptsCancelsRide() {
 
 async function main() {
   await testOnlyOnlineDriversReceiveOffers();
+  await testMatchingEmitsExactlyOncePerDriver();
   await testOffersOnlyFirstBatchOfOnlineDrivers();
-  await testSkipsDriversAlreadyOfferedAndKeepsDistanceOrder();
+  await testNextAttemptSkipsPreviousBatchAndOffersNextBatch();
   await testNoRepeatedOfferStillContinuesSearch();
-  await testDeliveryFailureMarksOfferAndDeletesRedisOffer();
   await testOfferTimeoutSchedulesNextSearchAttempt();
   await testNoDriverAfterMaxAttemptsCancelsRide();
 }

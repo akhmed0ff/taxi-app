@@ -13,6 +13,7 @@ import { AuthUser } from '../../common/auth/auth-user';
 import { RealtimeEvent } from '../../common/realtime-events';
 import { UserRoleValue } from '../../common/roles';
 import { PrismaService } from '../../infrastructure/db/prisma.service';
+import { GeoService } from '../../infrastructure/redis/geo.service';
 import { RedisService } from '../../infrastructure/redis/redis.service';
 import { MapboxService } from '../../infrastructure/maps/mapbox.service';
 import { SocketGateway } from '../../infrastructure/socket/socket.gateway';
@@ -25,6 +26,7 @@ import {
   TariffClass,
 } from '../pricing/tariff-class';
 import { RideOfferStatusValue } from '../matching/ride-offer-status';
+import { MatchingService } from '../matching/matching.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { ORDER_STATUS_FLOW, OrderStatus, OrderStatusValue } from './order-status';
 import { getRideStatusesForHistoryFilter } from './ride-history-filter';
@@ -33,6 +35,14 @@ interface CompleteTripInput {
   paymentMethod?: PaymentMethod;
   waitingMinutes?: number;
   stopMinutes?: number;
+}
+
+interface RideHistoryPage<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
 }
 
 const ACTIVE_RIDE_OFFER_STATUSES: string[] = [
@@ -51,17 +61,21 @@ export class OrderService {
     private readonly pricingService: PricingService,
     private readonly redis: RedisService,
     private readonly socket: SocketGateway,
+    private readonly matching: MatchingService,
     @InjectQueue('ride-matching') private readonly rideMatchingQueue: Queue,
     @Optional() private readonly mapbox?: MapboxService,
+    @Optional() private readonly geo?: GeoService,
   ) {}
 
   async create(dto: CreateOrderDto) {
-    const estimate = await this.calculateEstimate(dto);
+    const tariffClass = await this.resolveTariffClassForCreate(dto);
+    const dtoWithTariff: CreateOrderDto = { ...dto, tariffClass };
+    const estimate = await this.calculateEstimate(dtoWithTariff);
 
     const ride = await this.prisma.ride.create({
       data: {
         customerId: dto.customerId,
-        tariffClass: dto.tariffClass ?? DEFAULT_TARIFF_CLASS,
+        tariffClass,
         pickupLat: dto.pickupLat,
         pickupLng: dto.pickupLng,
         pickupAddress: dto.pickupAddress,
@@ -95,6 +109,21 @@ export class OrderService {
       },
     );
 
+    // Local/dev reliability: trigger the first matching attempt inline.
+    // BullMQ workers may not be running in some dev setups.
+    try {
+      await this.matching.offerRideToNearbyDrivers({
+        rideId: ride.id,
+        pickupLat: ride.pickupLat,
+        pickupLng: ride.pickupLng,
+        radiusKm: 3,
+        offerTimeoutMs: 10_000,
+      });
+    } catch (error) {
+      this.logger.warn(`Matching ride ${ride.id}: inline attempt failed`);
+      this.logger.warn(error);
+    }
+
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.RIDE_NEW_ORDER, ride);
     this.socket.emitToOrder(ride.id, RealtimeEvent.RIDE_NEW_ORDER, ride);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.NEW_ORDER, ride);
@@ -102,6 +131,28 @@ export class OrderService {
     this.socket.emitToAdmins(RealtimeEvent.ORDER_UPDATED, ride);
 
     return ride;
+  }
+
+  private async resolveTariffClassForCreate(
+    dto: CreateOrderDto,
+  ): Promise<TariffClass> {
+    if (dto.tariffId) {
+      const row = await this.prisma.tariff.findFirst({
+        where: { id: dto.tariffId, active: true },
+      });
+
+      if (!row) {
+        throw new BadRequestException('Unknown or inactive tariffId');
+      }
+
+      if (dto.tariffClass && dto.tariffClass !== row.tariffClass) {
+        throw new BadRequestException('tariffClass does not match tariffId');
+      }
+
+      return row.tariffClass as TariffClass;
+    }
+
+    return (dto.tariffClass ?? DEFAULT_TARIFF_CLASS) as TariffClass;
   }
 
   async findOne(rideId: string) {
@@ -154,32 +205,58 @@ export class OrderService {
     });
   }
 
-  findPassengerHistory(user: AuthUser, filter?: string) {
+  async findPassengerHistory(
+    user: AuthUser,
+    filter?: string,
+    page = 1,
+    limit = 20,
+  ): Promise<RideHistoryPage<unknown>> {
     const statuses = getRideStatusesForHistoryFilter(filter);
+    const normalizedPage = Math.max(1, Math.floor(page));
+    const normalizedLimit = Math.min(100, Math.max(1, Math.floor(limit)));
+    const skip = (normalizedPage - 1) * normalizedLimit;
+    const where = {
+      customerId: user.userId,
+      ...(statuses ? { status: { in: statuses } } : {}),
+    };
 
-    return this.prisma.ride.findMany({
-      where: {
-        customerId: user.userId,
-        ...(statuses ? { status: { in: statuses } } : {}),
-      },
-      include: {
-        driver: {
-          include: {
-            user: true,
-            vehicle: true,
+    const [rides, total] = await Promise.all([
+      this.prisma.ride.findMany({
+        where,
+        include: {
+          driver: {
+            include: {
+              user: true,
+              vehicle: true,
+            },
+          },
+          payment: true,
+          statusHistory: {
+            orderBy: { createdAt: 'asc' },
           },
         },
-        payment: true,
-        statusHistory: {
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: normalizedLimit,
+      }),
+      this.prisma.ride.count({ where }),
+    ]);
+
+    return {
+      data: rides,
+      total,
+      page: normalizedPage,
+      limit: normalizedLimit,
+      hasMore: skip + rides.length < total,
+    };
   }
 
-  async findDriverHistory(user: AuthUser, filter?: string) {
+  async findDriverHistory(
+    user: AuthUser,
+    filter?: string,
+    page = 1,
+    limit = 20,
+  ): Promise<RideHistoryPage<unknown>> {
     const driver = await this.prisma.driver.findUnique({
       where: { userId: user.userId },
       select: { id: true },
@@ -190,22 +267,38 @@ export class OrderService {
     }
 
     const statuses = getRideStatusesForHistoryFilter(filter);
+    const normalizedPage = Math.max(1, Math.floor(page));
+    const normalizedLimit = Math.min(100, Math.max(1, Math.floor(limit)));
+    const skip = (normalizedPage - 1) * normalizedLimit;
+    const where = {
+      driverId: driver.id,
+      ...(statuses ? { status: { in: statuses } } : {}),
+    };
 
-    return this.prisma.ride.findMany({
-      where: {
-        driverId: driver.id,
-        ...(statuses ? { status: { in: statuses } } : {}),
-      },
-      include: {
-        customer: true,
-        payment: true,
-        statusHistory: {
-          orderBy: { createdAt: 'asc' },
+    const [rides, total] = await Promise.all([
+      this.prisma.ride.findMany({
+        where,
+        include: {
+          customer: true,
+          payment: true,
+          statusHistory: {
+            orderBy: { createdAt: 'asc' },
+          },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: normalizedLimit,
+      }),
+      this.prisma.ride.count({ where }),
+    ]);
+
+    return {
+      data: rides,
+      total,
+      page: normalizedPage,
+      limit: normalizedLimit,
+      hasMore: skip + rides.length < total,
+    };
   }
 
   async accept(rideId: string, driverId: string, user?: AuthUser) {
@@ -233,14 +326,23 @@ export class OrderService {
         throw new BadRequestException('Ride offer is not active for this driver');
       }
 
-      if (rideOffer.expiresAt <= acceptedAt) {
-        throw new BadRequestException('Ride offer expired');
+      if (!ACTIVE_RIDE_OFFER_STATUSES.includes(rideOffer.status)) {
+        throw new BadRequestException('Ride offer is not active for this driver');
       }
 
-      if (
-        !ACTIVE_RIDE_OFFER_STATUSES.includes(rideOffer.status)
-      ) {
-        throw new BadRequestException('Ride offer is not active for this driver');
+      if (rideOffer.expiresAt < acceptedAt) {
+        await tx.rideOffer.update({
+          where: {
+            rideId_driverId: {
+              rideId,
+              driverId,
+            },
+          },
+          data: {
+            status: RideOfferStatusValue.EXPIRED,
+          },
+        });
+        throw new BadRequestException('Ride offer expired');
       }
 
       const driverUpdate = await tx.driver.updateMany({
@@ -326,6 +428,7 @@ export class OrderService {
     });
 
     await this.cleanupRedisOffersForRide(rideId);
+    const driverEta = await this.calculateDriverEtaToPickup(ride);
 
     this.socket.emitToDriver(driverId, RealtimeEvent.DRIVER_ACCEPTED, ride);
     this.socket.emitToPassenger(ride.customerId, RealtimeEvent.RIDE_DRIVER_ASSIGNED, ride);
@@ -335,7 +438,7 @@ export class OrderService {
       ride.customerId,
       RealtimeEvent.DRIVER_ASSIGNED_LOWER,
       {
-        driver: mapRideDriverForSocket(ride),
+        driver: mapRideDriverForSocket(ride, driverEta),
         ride,
       },
     );
@@ -752,6 +855,52 @@ export class OrderService {
     await this.redis.client.set(cacheKey, JSON.stringify(tariff), 'EX', 60);
     return tariff;
   }
+
+  private async calculateDriverEtaToPickup(ride: {
+    driverId?: string | null;
+    pickupLat: number;
+    pickupLng: number;
+  }) {
+    if (!ride.driverId) {
+      return {
+        pickupLat: ride.pickupLat,
+        pickupLng: ride.pickupLng,
+      };
+    }
+
+    const location = await this.geo?.getDriverLocation(ride.driverId);
+
+    if (!location) {
+      return {
+        pickupLat: ride.pickupLat,
+        pickupLng: ride.pickupLng,
+      };
+    }
+
+    let etaMinutes: number | undefined;
+
+    if (this.mapbox?.isConfigured()) {
+      try {
+        const route = await this.mapbox.getRoute(
+          location.lat,
+          location.lng,
+          ride.pickupLat,
+          ride.pickupLng,
+        );
+        etaMinutes = clampEtaMinutes(Math.ceil(route.durationSeconds / 60));
+      } catch {
+        etaMinutes = undefined;
+      }
+    }
+
+    return {
+      driverLat: location.lat,
+      driverLng: location.lng,
+      pickupLat: ride.pickupLat,
+      pickupLng: ride.pickupLng,
+      etaMinutes,
+    };
+  }
 }
 
 function mapRideDriverForSocket(ride: {
@@ -766,10 +915,32 @@ function mapRideDriverForSocket(ride: {
     } | null;
   } | null;
   driverId?: string | null;
+}, etaInput: {
+  driverLat?: number;
+  driverLng?: number;
+  pickupLat: number;
+  pickupLng: number;
+  etaMinutes?: number;
 }) {
   if (!ride.driver) {
     return undefined;
   }
+
+  const distanceMeters =
+    typeof etaInput.driverLat === 'number' &&
+    typeof etaInput.driverLng === 'number'
+      ? calculateDistanceMeters(
+          etaInput.driverLat,
+          etaInput.driverLng,
+          etaInput.pickupLat,
+          etaInput.pickupLng,
+        )
+      : undefined;
+  const etaMinutes =
+    etaInput.etaMinutes ??
+    (typeof distanceMeters === 'number'
+      ? estimateEtaMinutes(distanceMeters)
+      : undefined);
 
   return {
     id: ride.driver.id,
@@ -780,9 +951,24 @@ function mapRideDriverForSocket(ride: {
       : 'ANGREN TAXI',
     plate: ride.driver.vehicle?.plateNumber,
     phone: ride.driver.user?.phone,
-    eta: '3 мин',
-    etaMinutes: 3,
+    eta: etaMinutes ? formatEta(etaMinutes) : undefined,
+    etaMinutes,
   };
+}
+
+export function estimateEtaMinutes(distanceMeters: number): number {
+  const averageCitySpeedKmh = 25;
+  const etaMinutes = Math.ceil((distanceMeters / 1000 / averageCitySpeedKmh) * 60);
+
+  return clampEtaMinutes(etaMinutes);
+}
+
+function clampEtaMinutes(value: number) {
+  return Math.min(30, Math.max(1, value));
+}
+
+function formatEta(etaMinutes: number) {
+  return etaMinutes <= 1 ? '1 мин' : `${etaMinutes} мин`;
 }
 
 function calculateDistanceMeters(

@@ -1,4 +1,3 @@
-import { BlurView } from 'expo-blur';
 import { ReactNode } from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 
@@ -15,7 +14,6 @@ export function BottomSheetPanel({
 }: BottomSheetPanelProps) {
   return (
     <View style={[styles.panel, style]}>
-      <BlurView intensity={55} pointerEvents="none" style={StyleSheet.absoluteFill} tint="light" />
       <View style={styles.content}>
         {showHandle ? <View style={styles.handle} /> : null}
         {children}
@@ -30,8 +28,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     borderWidth: 1,
     borderBottomWidth: 0,
-    borderColor: 'rgba(255,255,255,0.45)',
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderColor: 'rgba(15, 23, 42, 0.06)',
+    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
     shadowColor: '#101828',
     shadowOffset: { width: 0, height: -12 },

@@ -8,17 +8,14 @@ Driver mobile app built with React Native and Expo.
 - Geotracking starts when driver goes online
 - Incoming orders through push/socket flow
 - Accept order timer, currently 8 seconds
-- Navigation screen prepared for maps integration
+- Navigation/Trip screens use a stable fake map (Mapbox installed but disabled via flags)
 - Trip controls: start / complete
 - Balance: earnings and payout summary
 
 ## Geo Update
 
-When online, the app sends driver coordinates every 2.5 seconds:
-
-```ts
-socket.emit('LOCATION_UPDATE', coords);
-```
+When online, the app sends driver coordinates periodically to the backend:
+- `PATCH /drivers/:driverId/location`
 
 ## Realtime
 
@@ -28,7 +25,7 @@ Expected backend room:
 
 Expected events:
 
-- `NEW_ORDER`
+- `new_ride_offer` (driver offer)
 - `DRIVER_LOCATION`
 - `TRIP_STARTED`
 - `TRIP_COMPLETED`
@@ -39,6 +36,11 @@ Expected events:
 npm install
 npm run start
 ```
+
+## Feature flags
+
+Flags live in `driver/src/config/flags.ts`.
+While `FLAGS.USE_MOCK_MAP=true`, UI renders `FakeDriverMap` and does not require a Mapbox token.
 
 Environment variables:
 

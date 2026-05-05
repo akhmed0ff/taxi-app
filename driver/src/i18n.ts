@@ -24,7 +24,7 @@ const dictionaries = {
     newOrder: 'Новый заказ',
     pickup: 'Подача',
     destination: 'Куда',
-    skip: 'Пропустить',
+    skip: 'Отказаться',
     accept: 'Принять',
     tripInProgress: 'Поездка идет',
     passengerNearby: 'Пассажир рядом',

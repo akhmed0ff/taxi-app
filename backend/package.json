@@ -13,18 +13,24 @@
     "lint": "eslint \"src/**/*.ts\"",
     "test": "npm run test:core-flow",
     "test:env": "ts-node src/infrastructure/config/env.validation.spec.ts",
-    "test:auth": "ts-node src/modules/auth/auth.service.spec.ts",
+    "test:auth": "ts-node src/modules/auth/auth.service.spec.ts && ts-node src/modules/auth/auth.throttler.spec.ts",
     "test:pricing": "ts-node src/modules/pricing/pricing.service.spec.ts",
+    "test:rating": "ts-node src/modules/rating/rating.service.spec.ts",
     "test:concurrent-accept": "ts-node src/modules/order/order.service.concurrent.spec.ts",
     "test:order-lifecycle": "ts-node src/modules/order/order.service.lifecycle.spec.ts",
     "test:order-history": "ts-node src/modules/order/order.service.history.spec.ts",
     "test:matching": "ts-node src/modules/matching/matching.service.spec.ts",
     "test:socket": "ts-node src/infrastructure/socket/socket.gateway.spec.ts",
-    "test:core-flow": "npm run test:env && npm run test:auth && npm run test:pricing && npm run test:concurrent-accept && npm run test:order-lifecycle && npm run test:order-history && npm run test:matching && npm run test:socket",
+    "test:core-flow": "npm run test:env && npm run test:auth && npm run test:pricing && npm run test:rating && npm run test:concurrent-accept && npm run test:order-lifecycle && npm run test:order-history && npm run test:matching && npm run test:socket",
+    "check:legacy-hashes": "ts-node scripts/check-legacy-hashes.ts",
     "format": "prettier --write \"src/**/*.ts\" \"prisma/**/*.prisma\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "prisma:seed": "prisma db seed"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.3",
@@ -35,6 +41,7 @@
     "@nestjs/platform-express": "^11.1.6",
     "@nestjs/platform-socket.io": "^11.1.6",
     "@nestjs/swagger": "^11.4.2",
+    "@nestjs/throttler": "^6.5.0",
     "@nestjs/websockets": "^11.1.6",
     "@prisma/client": "^6.18.0",
     "@types/bcrypt": "^6.0.0",

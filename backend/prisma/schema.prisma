@@ -32,6 +32,9 @@ model RefreshToken {
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([tokenHash])
 }
 
 model Driver {
@@ -72,6 +75,8 @@ model DriverDocument {
   updatedAt DateTime @updatedAt
 
   driver Driver @relation(fields: [driverId], references: [id])
+
+  @@index([driverId])
 }
 
 model Ride {
@@ -94,6 +99,8 @@ model Ride {
   finalFare      Int?
   finalFareDetails Json?
   cancelReason   String?
+  passengerRating Int?
+  driverRating    Int?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -102,6 +109,13 @@ model Ride {
   offers        RideOffer[]
   statusHistory RideStatusHistory[]
   payment       Payment?
+
+  @@index([customerId])
+  @@index([driverId])
+  @@index([status])
+  @@index([customerId, status])
+  @@index([driverId, status])
+  @@index([createdAt(sort: Desc)])
 }
 
 model RideOffer {
@@ -130,6 +144,8 @@ model RideStatusHistory {
   createdAt DateTime   @default(now())
 
   ride Ride @relation(fields: [rideId], references: [id])
+
+  @@index([rideId])
 }
 
 model Payment {
@@ -146,12 +162,19 @@ model Payment {
 
   ride Ride @relation(fields: [rideId], references: [id])
   user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 model Tariff {
   id                 String   @id @default(cuid())
   city               String   @default("Angren")
   tariffClass        String
+  title              String   @default("")
+  sortOrder          Int      @default(0)
+  etaMinutes         Int      @default(5)
+  seats              Int      @default(4)
+  pricePer100m       Int?
   baseFare           Int
   perKm              Int      @default(2000)
   freeWaitingMinutes Int      @default(3)

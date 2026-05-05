@@ -39,7 +39,7 @@ export class MapboxService {
   ];
 
   constructor(config: ConfigService) {
-    this.accessToken = config.get<string>('MAPBOX_ACCESS_TOKEN');
+    this.accessToken = config.get<string>('MAPBOX_ACCESS_TOKEN')?.trim();
   }
 
   isConfigured() {
@@ -95,6 +95,7 @@ export class MapboxService {
     );
     url.searchParams.set('access_token', this.accessToken as string);
     url.searchParams.set('limit', '1');
+    url.searchParams.set('country', 'uz');
     url.searchParams.set('language', 'ru');
 
     try {
@@ -162,8 +163,10 @@ export class MapboxService {
   }
 
   private assertConfigured() {
-    if (!this.accessToken) {
-      throw new ServiceUnavailableException('Mapbox is not configured');
+    if (!this.isConfigured()) {
+      throw new ServiceUnavailableException(
+        'MAPBOX_ACCESS_TOKEN is not configured. Set MAPBOX_ACCESS_TOKEN in backend/.env and restart backend.',
+      );
     }
   }
 

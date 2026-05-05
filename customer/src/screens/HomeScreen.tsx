@@ -1,207 +1,103 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animated,
+  ActivityIndicator,
   Alert,
+  Animated,
   Easing,
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
-import { PassengerMapboxMap } from '../components/map';
+import { FakeMapPlaceholder } from '../components/map';
 import {
   AppButton,
   BottomSheetPanel,
   GlassCard,
   IconButton,
-  QuickPlaceButton,
   TariffCard,
 } from '../components/ui';
 import {
-  isNetworkError,
-  reverseGeocodePickup,
-  type DestinationSearchResult,
-  type RouteResponse,
+  createOrder,
+  ensurePassengerDevSession,
+  getTariffs,
+  type PublicTariff,
 } from '../services/api';
+import {
+  calculateEstimatedFare,
+  type EstimatedFareResult,
+} from '../services/fare/fareService';
+import {
+  getDestinationOptions,
+  getPickupPoint,
+  type DestinationOption,
+} from '../services/locations/locationProvider';
 import { usePassengerRideState } from '../state/passengerRideState';
 import { Order, Point, TariffClass } from '../types/order';
-import { DestinationSearchScreen } from './DestinationSearchScreen';
+import { OrderStatus } from '../types/orderStatus';
 
 interface HomeScreenProps {
   order?: Order;
+  onOrderCreated?: (order: Order) => void;
   onCancelOrder: () => Promise<void>;
-  onOrderRequested: (pickup: Point, dropoff: Point, tariff: TariffClass) => Promise<Order>;
   onOpenHistory: () => void;
   onLogout: () => void;
 }
 
-const ANGREN_FALLBACK: Point = {
-  lat: 41.0167,
-  lng: 70.1436,
-  address: 'Angren',
+const BOTTOM_NAV_HEIGHT = 88;
+const SHEET_OVERLAP = 8;
+
+const tariffIcons: Record<TariffClass, keyof typeof Ionicons.glyphMap> = {
+  STANDARD: 'car-outline',
+  COMFORT: 'car-sport-outline',
+  COMFORT_PLUS: 'car-sport-outline',
+  DELIVERY: 'cube-outline',
 };
 
-const quickPlaces: Array<{
+type TariffViewModel = PublicTariff & {
   icon: keyof typeof Ionicons.glyphMap;
-  id: 'home' | 'work' | 'saved';
-  label: string;
-  point: Point;
-}> = [
-  {
-    icon: 'home-outline',
-    id: 'home',
-    label: 'Р вЂќР С•Р С',
-    point: {
-      lat: 41.0224,
-      lng: 70.1542,
-      address: 'Р С’Р Р…Р С–РЎР‚Р ВµР Р…, 5-Р в„– Р СР С‘Р С”РЎР‚Р С•РЎР‚Р В°Р в„–Р С•Р Р…, Р Т‘Р С•Р С',
-    },
-  },
-  {
-    icon: 'briefcase-outline',
-    id: 'work',
-    label: 'Р В Р В°Р В±Р С•РЎвЂљР В°',
-    point: {
-      lat: 41.0289,
-      lng: 70.1684,
-      address: 'Р С’Р Р…Р С–РЎР‚Р ВµР Р…, Р С—РЎР‚Р С•Р СР В·Р С•Р Р…Р В°, РЎР‚Р В°Р В±Р С•РЎвЂљР В°',
-    },
-  },
-  {
-    icon: 'star-outline',
-    id: 'saved',
-    label: 'Р ВР В·Р В±РЎР‚Р В°Р Р…Р Р…Р С•Р Вµ',
-    point: {
-      lat: 41.0135,
-      lng: 70.1328,
-      address: 'Р С’Р Р…Р С–РЎР‚Р ВµР Р…, Р В»РЎР‹Р В±Р С‘Р СР С•Р Вµ Р СР ВµРЎРѓРЎвЂљР С•',
-    },
-  },
-];
-
-const tariffs = [
-  {
-    eta: '3 min',
-    icon: 'car-outline',
-    id: 'standard',
-    price: '3 800 sum',
-    tariffClass: 'STANDARD',
-    title: 'Standard',
-  },
-  {
-    eta: '5 min',
-    icon: 'car-sport-outline',
-    id: 'comfort',
-    price: '5 000 sum',
-    tariffClass: 'COMFORT',
-    title: 'Comfort',
-  },
-  {
-    eta: '7 min',
-    icon: 'car-sport-outline',
-    id: 'comfort-plus',
-    price: '6 500 sum',
-    tariffClass: 'COMFORT_PLUS',
-    title: 'Comfort+',
-  },
-  {
-    eta: '10 min',
-    icon: 'cube-outline',
-    id: 'delivery',
-    price: '8 800 sum',
-    tariffClass: 'DELIVERY',
-    title: 'Delivery',
-  },
-] as const satisfies ReadonlyArray<{
-  eta: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  id: string;
-  price: string;
-  tariffClass: TariffClass;
-  title: string;
-}>;
-
-const tariffPricing: Record<
-  TariffClass,
-  { baseFare: number; minimumFare: number; perKm: number }
-> = {
-  STANDARD: {
-    baseFare: 3800,
-    minimumFare: 3800,
-    perKm: 2000,
-  },
-  COMFORT: {
-    baseFare: 10000,
-    minimumFare: 16000,
-    perKm: 2500,
-  },
-  COMFORT_PLUS: {
-    baseFare: 6500,
-    minimumFare: 6500,
-    perKm: 3500,
-  },
-  DELIVERY: {
-    baseFare: 8800,
-    minimumFare: 8800,
-    perKm: 3500,
-  },
 };
 
 const mockDriver = {
   car: 'Chevrolet Cobalt',
   driverName: 'Alisher',
-  eta: '3 min',
+  eta: '3 мин',
   plate: '01 A 777 AA',
   rating: 4.9,
 };
 
-function calculateTariffFare(tariffClass: TariffClass, distanceMeters: number) {
-  const pricing = tariffPricing[tariffClass];
-  const distanceKm = distanceMeters / 1000;
-  const rawFare = pricing.baseFare + Math.round(distanceKm * pricing.perKm);
+function mapPublicTariffToViewModel(tariff: PublicTariff): TariffViewModel {
+  const icon = tariffIcons[tariff.code] ?? 'car-outline';
 
-  return Math.max(rawFare, pricing.minimumFare);
-}
-
-function formatUzs(value: number) {
-  return `${Math.round(value).toLocaleString('ru-RU').replace(/\u00a0/g, ' ')} РЎРѓРЎС“Р С`;
-}
-
-function formatDistance(distanceMeters: number) {
-  return `${(distanceMeters / 1000).toFixed(1).replace('.', ',')} Р С”Р С`;
-}
-
-function formatDuration(durationSeconds: number) {
-  const totalMinutes = Math.max(1, Math.round(durationSeconds / 60));
-
-  if (totalMinutes < 60) {
-    return `${totalMinutes} Р СР С‘Р Р…`;
-  }
-
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return minutes > 0 ? `${hours} РЎвЂЎ ${minutes} Р СР С‘Р Р…` : `${hours} РЎвЂЎ`;
+  return {
+    ...tariff,
+    icon,
+  };
 }
 
 export function HomeScreen({
   onCancelOrder,
+  onOrderCreated,
   onOpenHistory,
-  onOrderRequested,
   order,
 }: HomeScreenProps) {
-  const [pickupAddress, setPickupAddress] = useState('Р С›Р С—РЎР‚Р ВµР Т‘Р ВµР В»РЎРЏР ВµР С Р В°Р Т‘РЎР‚Р ВµРЎРѓ...');
-  const [isPickupAddressLoading, setIsPickupAddressLoading] = useState(true);
+  const pickup = getPickupPoint();
+  const pickupAddress = pickup.addressLabel;
+  const isPickupAddressLoading = pickup.isLoading;
   const [destination, setDestination] = useState<Point>();
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
-  const [isDestinationSearchOpen, setIsDestinationSearchOpen] = useState(false);
-  const [isRouteLoading, setIsRouteLoading] = useState(false);
-  const [routeErrorMessage, setRouteErrorMessage] = useState<string>();
-  const [route, setRoute] = useState<RouteResponse | null>(null);
+  const [fareByTariffCode, setFareByTariffCode] = useState<
+    Partial<Record<TariffClass, EstimatedFareResult>>
+  >({});
+  const [tariffs, setTariffs] = useState<TariffViewModel[]>([]);
+  const [isTariffsLoading, setIsTariffsLoading] = useState(true);
+  const [tariffsError, setTariffsError] = useState<string>();
+  const [userPickedTariff, setUserPickedTariff] = useState(false);
+  const [destinationModalVisible, setDestinationModalVisible] = useState(false);
   const {
     markDriverAssigned,
     markOrderCreated,
@@ -212,32 +108,67 @@ export function HomeScreen({
     state: rideState,
   } = usePassengerRideState();
   const pulseAnim = useRef(new Animated.Value(0)).current;
-  const [currentPoint, setCurrentPoint] = useState<Point>(ANGREN_FALLBACK);
+  const currentPoint = pickup.point;
+
+  const activeOrder =
+    order && order.status !== OrderStatus.CANCELLED ? order : undefined;
+
+  const isOrderSearching =
+    !!activeOrder &&
+    (activeOrder.status === OrderStatus.NEW ||
+      activeOrder.status === OrderStatus.SEARCHING ||
+      activeOrder.status === OrderStatus.OFFERED);
+
+  const isOrderDriverFound =
+    !!activeOrder &&
+    (activeOrder.status === OrderStatus.ACCEPTED ||
+      activeOrder.status === OrderStatus.ARRIVING);
+
+  const isOrderRiding =
+    !!activeOrder && activeOrder.status === OrderStatus.IN_PROGRESS;
+
+  const isOrderCompleted =
+    !!activeOrder && activeOrder.status === OrderStatus.COMPLETED;
+
+  const displayDriver = activeOrder?.driver ?? rideState.driver;
+  const displayOrderId = activeOrder?.id ?? rideState.orderId;
+
+  const orderFabBlocked =
+    isTariffsLoading ||
+    isCreatingOrder ||
+    isOrderSearching ||
+    isOrderDriverFound ||
+    isOrderRiding;
+
+  const passengerTariffs = useMemo(
+    () => tariffs.filter((t) => t.code !== 'DELIVERY'),
+    [tariffs],
+  );
+
+  const tariffsReady =
+    !isTariffsLoading && !tariffsError && passengerTariffs.length > 0;
 
   const selectedTariffDetails =
-    tariffs.find((tariff) => tariff.tariffClass === rideState.selectedTariff) ??
-    tariffs[0];
-  const isSearchingDriver = rideState.status === 'SEARCHING';
-  const isDriverFound = rideState.status === 'DRIVER_FOUND';
-  const isRideStarted = rideState.status === 'RIDING';
-  const isRideCompleted = rideState.status === 'COMPLETED';
-  const driver = rideState.driver ?? order?.driver;
-  const orderId = rideState.orderId;
+    passengerTariffs.find((tariff) =>
+      activeOrder
+        ? tariff.code === activeOrder.tariff
+        : tariff.code === rideState.selectedTariff,
+    ) ?? passengerTariffs[0];
+  const selectedTariffTitle = selectedTariffDetails?.title ?? rideState.selectedTariff;
   const destinationAddress = destination?.address ?? '';
   const hasDestination = Boolean(destinationAddress);
-  const hasPickup = Boolean(pickupAddress.trim()) && !isPickupAddressLoading;
-  const routeReady = Boolean(route?.distance && route?.duration);
-  const routeSummary = routeErrorMessage
-    ? routeErrorMessage
-    : routeReady && route
-      ? `${formatDistance(route.distance)} | ${formatDuration(route.duration)}`
-      : isRouteLoading
-        ? 'Считаем маршрут...'
-        : 'Nearby drivers around Angren';
-  const canCreateOrder =
-    hasPickup && hasDestination && !isCreatingOrder && !isSearchingDriver && !orderId;
   const driverEta =
-    driver?.eta ?? (driver?.etaMinutes ? `${driver.etaMinutes} min` : mockDriver.eta);
+    displayDriver?.eta ??
+    (displayDriver?.etaMinutes != null
+      ? `${displayDriver.etaMinutes} мин`
+      : mockDriver.eta);
+
+  const pickupEtaText =
+    isOrderDriverFound || isOrderRiding
+      ? driverEta
+      : tariffsReady && selectedTariffDetails
+        ? `≈ ${selectedTariffDetails.etaMinutes} мин`
+        : '—';
 
   const pulseStyle = {
     opacity: pulseAnim.interpolate({
@@ -255,58 +186,81 @@ export function HomeScreen({
   };
 
   useEffect(() => {
-    void updateCurrentLocation();
+    void loadTariffs();
   }, []);
 
   useEffect(() => {
-    let isActive = true;
-
-    setIsPickupAddressLoading(true);
-    setPickupAddress('Р С›Р С—РЎР‚Р ВµР Т‘Р ВµР В»РЎРЏР ВµР С Р В°Р Т‘РЎР‚Р ВµРЎРѓ...');
-
-    const timer = setTimeout(() => {
-      void reverseGeocodePickup({
-        lat: currentPoint.lat,
-        lng: currentPoint.lng,
-      })
-        .then((result) => {
-          if (!isActive) {
-            return;
-          }
-
-          const nextAddress = result.fullAddress.trim() || 'Р С’Р Т‘РЎР‚Р ВµРЎРѓ Р Р…Р Вµ Р Р…Р В°Р в„–Р Т‘Р ВµР Р…';
-          setPickupAddress(nextAddress);
-          setCurrentPoint((point) => ({
-            ...point,
-            address: nextAddress,
-          }));
-        })
-        .catch((error) => {
-          if (!isActive) {
-            return;
-          }
-
-          console.warn(error);
-          const fallbackAddress = isNetworkError(error)
-            ? 'Р СњР ВµРЎвЂљ Р С‘Р Р…РЎвЂљР ВµРЎР‚Р Р…Р ВµРЎвЂљР В°. Р СњР Вµ РЎС“Р Т‘Р В°Р В»Р С•РЎРѓРЎРЉ Р С•Р С—РЎР‚Р ВµР Т‘Р ВµР В»Р С‘РЎвЂљРЎРЉ Р В°Р Т‘РЎР‚Р ВµРЎРѓ.'
-            : currentPoint.address?.trim() || 'Р С’Р Т‘РЎР‚Р ВµРЎРѓ Р Р…Р Вµ Р Р…Р В°Р в„–Р Т‘Р ВµР Р…';
-          setPickupAddress(fallbackAddress);
-        })
-        .finally(() => {
-          if (isActive) {
-            setIsPickupAddressLoading(false);
-          }
-        });
-    }, 850);
-
-    return () => {
-      isActive = false;
-      clearTimeout(timer);
-    };
-  }, [currentPoint.lat, currentPoint.lng]);
+    if (!order?.id || order.status === OrderStatus.CANCELLED || !order.dropoff) {
+      return;
+    }
+    const drop = order.dropoff;
+    setDestination({
+      lat: drop.lat,
+      lng: drop.lng,
+      address: drop.address,
+    });
+    selectTariff(order.tariff);
+    setUserPickedTariff(true);
+  }, [order?.id, order?.tariff, selectTariff]);
 
   useEffect(() => {
-    if (!isSearchingDriver) {
+    if (!order && rideState.status === 'IDLE' && !rideState.orderId) {
+      setUserPickedTariff(false);
+    }
+  }, [order, rideState.orderId, rideState.status]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!destination || !tariffsReady) {
+      setFareByTariffCode({});
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const pickupCoords = { lat: currentPoint.lat, lng: currentPoint.lng };
+    const destCoords = { lat: destination.lat, lng: destination.lng };
+
+    void (async () => {
+      try {
+        const entries = await Promise.all(
+          passengerTariffs.map(async (tariff) => {
+            const result = await calculateEstimatedFare({
+              pickup: pickupCoords,
+              destination: destCoords,
+              tariff,
+            });
+            return [tariff.code, result] as const;
+          }),
+        );
+        if (cancelled) {
+          return;
+        }
+        setFareByTariffCode(Object.fromEntries(entries));
+      } catch (error) {
+        console.warn(error);
+        if (!cancelled) {
+          setFareByTariffCode({});
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    tariffsReady,
+    currentPoint.lat,
+    currentPoint.lng,
+    destination?.lat,
+    destination?.lng,
+    passengerTariffs,
+  ]);
+
+  useEffect(() => {
+    const showPulse = isOrderSearching && !isCreatingOrder;
+    if (!showPulse) {
       pulseAnim.stopAnimation();
       pulseAnim.setValue(0);
       return;
@@ -323,25 +277,26 @@ export function HomeScreen({
 
     animation.start();
     return () => animation.stop();
-  }, [isSearchingDriver, pulseAnim]);
+  }, [isCreatingOrder, isOrderSearching, pulseAnim]);
 
   useEffect(() => {
-    if (order?.status === 'DRIVER_ASSIGNED' || order?.status === 'DRIVER_ARRIVED') {
+    if (order?.status === OrderStatus.ACCEPTED || order?.status === OrderStatus.ARRIVING) {
       markDriverAssigned(order);
       return;
     }
 
-    if (order?.status === 'IN_PROGRESS') {
+    if (order?.status === OrderStatus.IN_PROGRESS) {
+      markDriverAssigned(order);
       markRideStarted();
       return;
     }
 
-    if (order?.status === 'COMPLETED') {
+    if (order?.status === OrderStatus.COMPLETED) {
       markRideCompleted();
       return;
     }
 
-    if (!order && rideState.status !== 'IDLE') {
+    if (!order) {
       resetRide();
     }
   }, [
@@ -350,116 +305,136 @@ export function HomeScreen({
     markRideStarted,
     order,
     resetRide,
-    rideState.status,
   ]);
 
   async function handleOrder() {
-    if (!destination || isCreatingOrder || orderId) {
+    if (!destination || !selectedTariffDetails || isCreatingOrder || activeOrder) {
       return;
     }
 
     setIsCreatingOrder(true);
     try {
-      const createdOrder = await onOrderRequested(
-        { ...currentPoint, address: pickupAddress },
-        destination,
-        selectedTariffDetails.tariffClass,
-      );
-      markOrderCreated(createdOrder.id, selectedTariffDetails.tariffClass);
+      const session = await ensurePassengerDevSession();
+      const nextOrder = await createOrder({
+        accessToken: session.accessToken,
+        customerId: session.customerId,
+        pickup: {
+          lat: currentPoint.lat,
+          lng: currentPoint.lng,
+          address: pickupAddress,
+        },
+        dropoff: {
+          lat: destination.lat,
+          lng: destination.lng,
+          address: destination.address,
+        },
+        tariff: selectedTariffDetails.code,
+        tariffId: selectedTariffDetails.id,
+      });
+
+      onOrderCreated?.(nextOrder);
+      markOrderCreated(nextOrder.id, selectedTariffDetails.code);
     } catch (error) {
       console.warn(error);
-      Alert.alert('Р СњР Вµ РЎС“Р Т‘Р В°Р В»Р С•РЎРѓРЎРЉ РЎРѓР С•Р В·Р Т‘Р В°РЎвЂљРЎРЉ Р В·Р В°Р С”Р В°Р В·');
-      resetRide();
+      Alert.alert(
+        'Ошибка',
+        error instanceof Error ? error.message : 'Не удалось создать заказ',
+      );
     } finally {
       setIsCreatingOrder(false);
     }
   }
 
   function handleOrderPress() {
+    if (__DEV__) {
+      console.log('[customer ui] order pressed');
+    }
+
+    if (activeOrder) {
+      return;
+    }
+
+    if (isTariffsLoading) {
+      Alert.alert('Подождите', 'Загружаем тарифы');
+      return;
+    }
+
+    if (tariffsError || passengerTariffs.length === 0) {
+      Alert.alert('Тарифы', tariffsError ?? 'Нет доступных тарифов');
+      return;
+    }
+
     if (isPickupAddressLoading) {
-      Alert.alert('Подождите, определяем адрес');
+      Alert.alert('Подождите', 'Определяем адрес');
       return;
     }
 
     if (!hasDestination) {
-      setIsDestinationSearchOpen(true);
+      Alert.alert('Выберите пункт назначения');
       return;
     }
 
+    if (!userPickedTariff) {
+      Alert.alert('Выберите тариф');
+      return;
+    }
+
+    if (!selectedTariffDetails) {
+      Alert.alert('Выберите тариф');
+      return;
+    }
 
     void handleOrder();
   }
 
-  async function updateCurrentLocation() {
+  async function loadTariffs() {
+    setIsTariffsLoading(true);
+    setTariffsError(undefined);
+
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-
-      if (status !== 'granted') {
-        setCurrentPoint(ANGREN_FALLBACK);
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({});
-      const nextPoint = {
-        lat: location.coords.latitude,
-        lng: location.coords.longitude,
-        address: ANGREN_FALLBACK.address,
-      };
-
-      setCurrentPoint(nextPoint);
+      const activeTariffs = await getTariffs();
+      setTariffs(activeTariffs.map(mapPublicTariffToViewModel));
     } catch (error) {
       console.warn(error);
-      setCurrentPoint(ANGREN_FALLBACK);
+      setTariffsError('Не удалось загрузить тарифы');
+    } finally {
+      setIsTariffsLoading(false);
     }
   }
 
-  function handlePickupChange({ pickupLat, pickupLng }: { pickupLat: number; pickupLng: number }) {
-    setCurrentPoint((point) => ({
-      ...point,
-      lat: pickupLat,
-      lng: pickupLng,
-      address: pickupAddress,
-    }));
+  function openDestinationModal() {
+    if (__DEV__) {
+      console.log('[customer ui] destination pressed');
+    }
+    setDestinationModalVisible(true);
   }
 
-  function handleDestinationSelected(result: DestinationSearchResult) {
-    setDestination({
-      lat: result.lat,
-      lng: result.lng,
-      address: result.fullAddress,
-    });
-    setIsDestinationSearchOpen(false);
+  function closeDestinationModal() {
+    setDestinationModalVisible(false);
   }
 
-  function handleQuickPlaceSelect(point: Point) {
-    setDestination(point);
-    setIsDestinationSearchOpen(false);
+  function handleSelectDestinationOption(option: DestinationOption) {
+    setDestination(option.point);
+    closeDestinationModal();
   }
 
-  function getTariffPrice(tariff: (typeof tariffs)[number]) {
+  /** Цена на карточке: без адреса «от — сум», с адресом «от {formattedFare}». */
+  function getTariffPriceLabel(tariff: TariffViewModel) {
     if (!hasDestination) {
-      return `РѕС‚ ${formatUzs(tariffPricing[tariff.tariffClass].minimumFare)}`;
+      return 'от — сум';
     }
-
-    if (isRouteLoading) {
-      return 'СѓС‚РѕС‡РЅСЏРµС‚СЃСЏ';
-    }
-
-    if (!route?.distance) {
-      return 'СѓС‚РѕС‡РЅСЏРµС‚СЃСЏ';
-    }
-
-    return formatUzs(calculateTariffFare(tariff.tariffClass, route.distance));
+    const formatted = fareByTariffCode[tariff.code]?.formattedFare;
+    return formatted ? `от ${formatted}` : 'от …';
   }
 
   function handleCancelRideState() {
-    Alert.alert('Cancel ride?', undefined, [
+    Alert.alert('Отменить заказ?', undefined, [
       {
-        text: 'No',
+        text: 'Нет',
         style: 'cancel',
       },
       {
-        text: 'Cancel',
+        text: 'Отменить',
         style: 'destructive',
         onPress: () => {
           void cancelRide();
@@ -474,40 +449,28 @@ export function HomeScreen({
       resetRide();
     } catch (error) {
       console.warn(error);
-      Alert.alert('Could not cancel the order');
+      Alert.alert('Не удалось отменить заказ');
     }
   }
 
   function handleCallDriver() {
-    void Linking.openURL(`tel:${driver?.phone ?? ''}`);
+    void Linking.openURL(`tel:${displayDriver?.phone ?? ''}`);
   }
 
   function handleMessageDriver() {
-    Alert.alert('Messages will be available soon');
+    Alert.alert('Сообщения скоро будут доступны');
   }
 
   return (
-    <View style={styles.screen}>
-      <PassengerMapboxMap
-        destinationLat={destination?.lat}
-        destinationLng={destination?.lng}
-        initialPickupLat={currentPoint.lat}
-        initialPickupLng={currentPoint.lng}
-        onPickupChange={handlePickupChange}
-        onRouteChange={setRoute}
-        onRouteErrorChange={setRouteErrorMessage}
-        onRouteLoadingChange={setIsRouteLoading}
-        showDestinationMarker={hasDestination}
-        showLocationButton={false}
-        showPickupPin={false}
-      />
+    <View pointerEvents="box-none" style={styles.screen}>
+      <FakeMapPlaceholder showCenterNotice={false} />
 
       <View pointerEvents="none" style={styles.centerPinWrap}>
         <View style={styles.etaBubble}>
-          <Text style={styles.etaTime}>{isDriverFound ? driverEta : selectedTariffDetails.eta}</Text>
-          <Text style={styles.etaLabel}>Pickup</Text>
+          <Text style={styles.etaTime}>{pickupEtaText}</Text>
+          <Text style={styles.etaLabel}>Подача</Text>
         </View>
-        {isSearchingDriver ? (
+        {isOrderSearching && !isCreatingOrder ? (
           <Animated.View style={[styles.pinPulse, pulseStyle]} />
         ) : null}
         <View style={styles.pin}>
@@ -515,7 +478,7 @@ export function HomeScreen({
         </View>
       </View>
 
-      {isDriverFound || isRideStarted ? (
+      {isOrderDriverFound || isOrderRiding ? (
         <View pointerEvents="none" style={styles.mockRoute}>
           <View style={styles.mockRouteLine} />
           <View style={styles.mockDriverMarker}>
@@ -524,137 +487,164 @@ export function HomeScreen({
         </View>
       ) : null}
 
-      <View style={styles.topLayer}>
-        <View style={styles.topButtons}>
-          <IconButton
-            accessibilityLabel="History"
-            icon={<Ionicons color="#111111" name="person-outline" size={22} />}
-            onPress={onOpenHistory}
-          />
-          <IconButton
-            accessibilityLabel="Options"
-            icon={<Ionicons color="#111111" name="options-outline" size={22} />}
-          />
-        </View>
-
-        <GlassCard style={styles.addressCard}>
-          <View style={styles.addressRow}>
-            <View style={styles.routeDot} />
-            <View style={styles.addressContent}>
-              <Text style={styles.fieldLabel}>From</Text>
-              <TextInput
-                editable={false}
-                placeholder="Current location"
-                placeholderTextColor="#98A2B3"
-                style={styles.addressInput}
-                value={isPickupAddressLoading ? 'Р С›Р С—РЎР‚Р ВµР Т‘Р ВµР В»РЎРЏР ВµР С Р В°Р Т‘РЎР‚Р ВµРЎРѓ...' : pickupAddress}
-              />
-            </View>
+      <View style={styles.topLayer} pointerEvents="box-none">
+        <View style={styles.addressCard}>
+          <View style={styles.addressHeaderRow}>
+            <Text style={styles.fieldLabel}>Откуда</Text>
           </View>
-
-          <View style={styles.routeLine} />
-
-          <View style={styles.addressRow}>
-            <View style={[styles.routeDot, styles.routeDotDestination]} />
-            <View style={styles.addressContent}>
-              <Text style={styles.fieldLabel}>To</Text>
-              <Pressable
-                onPress={() => setIsDestinationSearchOpen(true)}
-                style={styles.destinationFieldButton}
+          <View style={styles.addressRowMain}>
+            <Text
+              numberOfLines={2}
+              style={styles.addressPrimary}
+            >
+              {isPickupAddressLoading ? 'Определяем адрес...' : 'Текущее местоположение'}
+            </Text>
+            <Ionicons color="#98A2B3" name="chevron-forward" size={22} />
+          </View>
+          <View style={styles.addressDivider} />
+          <View style={styles.addressHeaderRow}>
+            <Text style={styles.fieldLabel}>Куда</Text>
+          </View>
+          <Pressable
+            accessibilityLabel="Выбрать пункт назначения"
+            accessibilityRole="button"
+            disabled={Boolean(activeOrder)}
+            onPress={openDestinationModal}
+            style={({ pressed }) => [
+              styles.destinationRowPressable,
+              pressed && styles.addressCardPressed,
+            ]}
+          >
+            <View style={styles.addressRowMain}>
+              <Text
+                numberOfLines={2}
+                style={[styles.addressPrimary, !destination && styles.addressPlaceholder]}
               >
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    styles.addressInput,
-                    !destinationAddress && styles.addressPlaceholder,
+                {destination?.address
+                  ? destination.address.replace(/^Ангрен,\s*/u, '').trim() ||
+                    destination.address
+                  : 'Куда поедем?'}
+              </Text>
+              <View style={styles.addRound}>
+                <Ionicons color="#FFFFFF" name="add" size={26} />
+              </View>
+            </View>
+          </Pressable>
+        </View>
+      </View>
+
+      <Modal
+        animationType="slide"
+        onRequestClose={closeDestinationModal}
+        transparent
+        visible={destinationModalVisible}
+      >
+        <View style={styles.destinationModalRoot}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={closeDestinationModal}
+            style={styles.destinationModalBackdrop}
+          />
+          <View style={styles.destinationModalSheet}>
+            <View style={styles.destinationModalHandle} />
+            <Text style={styles.destinationModalTitle}>Куда поедем?</Text>
+            <ScrollView
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {getDestinationOptions().map((option) => (
+                <Pressable
+                  accessibilityRole="button"
+                  key={option.label}
+                  onPress={() => handleSelectDestinationOption(option)}
+                  style={({ pressed }) => [
+                    styles.destinationModalRow,
+                    pressed && styles.destinationModalRowPressed,
                   ]}
                 >
-                  {destinationAddress || 'Р С™РЎС“Р Т‘Р В° Р С—Р С•Р ВµР Т‘Р ВµР С?'}
-                </Text>
-              </Pressable>
-            </View>
+                  <Ionicons color="#667085" name="location-outline" size={22} />
+                  <Text numberOfLines={2} style={styles.destinationModalRowLabel}>
+                    {option.label}
+                  </Text>
+                  <Ionicons color="#98A2B3" name="chevron-forward" size={20} />
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable
+              accessibilityRole="button"
+              onPress={closeDestinationModal}
+              style={({ pressed }) => [
+                styles.destinationModalCancel,
+                pressed && styles.destinationModalCancelPressed,
+              ]}
+            >
+              <Text style={styles.destinationModalCancelText}>Отмена</Text>
+            </Pressable>
           </View>
+        </View>
+      </Modal>
 
-          <View style={styles.quickPlaces}>
-            {quickPlaces.map((place) => (
-              <QuickPlaceButton
-                icon={<Ionicons color="#111111" name={place.icon} size={16} />}
-                key={place.id}
-                label={place.label}
-                onPress={() => handleQuickPlaceSelect(place.point)}
-                style={
-                  destination?.address === place.point.address
-                    ? styles.quickPlaceSelected
-                    : undefined
-                }
-              />
-            ))}
-          </View>
-        </GlassCard>
-      </View>
-
-      <View style={styles.mapActions}>
+      <View style={styles.mapActions} pointerEvents="box-none">
         <IconButton
-          accessibilityLabel="Safety"
+          accessibilityLabel="Безопасность"
           icon={<Ionicons color="#111111" name="shield-checkmark-outline" size={23} />}
           variant="yellow"
+          onPress={() => Alert.alert('Безопасность')}
         />
         <IconButton
-          accessibilityLabel="My location"
+          accessibilityLabel="Геолокация"
           icon={<MaterialCommunityIcons color="#111111" name="crosshairs-gps" size={24} />}
-          onPress={updateCurrentLocation}
+          onPress={() => Alert.alert('Геолокация')}
         />
       </View>
 
-      <BottomSheetPanel style={styles.sheet}>
-        <View style={styles.sheetHeader}>
-          <View>
-            <Text style={styles.sheetTitle}>Choose a tariff</Text>
-            <Text style={styles.sheetSubtitle}>{hasDestination ? routeSummary : 'Nearby drivers around Angren'}</Text>
-          </View>
-          <Text style={styles.sheetBadge}>ANGREN</Text>
-        </View>
-
-        {isRideStarted || isRideCompleted ? (
+      <BottomSheetPanel style={[styles.sheet, { bottom: BOTTOM_NAV_HEIGHT - SHEET_OVERLAP }]}>
+        {isOrderRiding || isOrderCompleted ? (
           <GlassCard style={styles.searchCard}>
             <View style={styles.searchHeader}>
               <View style={styles.searchIcon}>
                 <Ionicons
                   color="#111111"
-                  name={isRideCompleted ? 'checkmark-done-outline' : 'navigate-outline'}
+                  name={isOrderCompleted ? 'checkmark-done-outline' : 'navigate-outline'}
                   size={24}
                 />
               </View>
               <View style={styles.searchText}>
                 <Text style={styles.searchTitle}>
-                  {isRideCompleted ? 'Trip completed' : 'Trip started'}
+                  {isOrderCompleted ? 'Поездка завершена' : 'Поездка началась'}
                 </Text>
                 <Text style={styles.searchSubtitle}>
-                  {orderId ? `Order #${orderId.slice(0, 8)}` : selectedTariffDetails.title}
+                  {displayOrderId ? `Заказ #${displayOrderId.slice(0, 8)}` : selectedTariffTitle}
                 </Text>
               </View>
             </View>
           </GlassCard>
-        ) : isDriverFound ? (
+        ) : isOrderDriverFound ? (
           <GlassCard style={styles.driverCard}>
+            <Text style={styles.driverFoundLabel}>Водитель найден</Text>
             <View style={styles.driverTopRow}>
               <View style={styles.driverAvatar}>
                 <Ionicons color="#111111" name="person" size={26} />
               </View>
               <View style={styles.driverInfo}>
                 <View style={styles.driverNameRow}>
-                  <Text style={styles.driverName}>{driver?.name ?? mockDriver.driverName}</Text>
+                  <Text style={styles.driverName}>
+                    {displayDriver?.name ?? mockDriver.driverName}
+                  </Text>
                   <View style={styles.ratingBadge}>
                     <Ionicons color="#111111" name="star" size={13} />
-                    <Text style={styles.ratingText}>{driver?.rating ?? mockDriver.rating}</Text>
+                    <Text style={styles.ratingText}>
+                      {displayDriver?.rating ?? mockDriver.rating}
+                    </Text>
                   </View>
                 </View>
-                <Text style={styles.driverMeta}>{driver?.car ?? mockDriver.car}</Text>
-                <Text style={styles.driverPlate}>{driver?.plate ?? mockDriver.plate}</Text>
+                <Text style={styles.driverMeta}>{displayDriver?.car ?? mockDriver.car}</Text>
+                <Text style={styles.driverPlate}>{displayDriver?.plate ?? mockDriver.plate}</Text>
               </View>
               <View style={styles.driverEta}>
                 <Text style={styles.driverEtaValue}>{driverEta}</Text>
-                <Text style={styles.driverEtaLabel}>Pickup</Text>
+                <Text style={styles.driverEtaLabel}>Подача</Text>
               </View>
             </View>
 
@@ -664,7 +654,7 @@ export function HomeScreen({
                 onPress={handleCallDriver}
                 size="md"
                 style={styles.driverActionButton}
-                title="Call"
+                title="Позвонить"
                 variant="yellow"
               />
               <AppButton
@@ -672,40 +662,88 @@ export function HomeScreen({
                 onPress={handleMessageDriver}
                 size="md"
                 style={styles.driverActionButton}
-                title="Message"
+                title="Сообщение"
                 variant="outline"
               />
             </View>
           </GlassCard>
-        ) : isSearchingDriver ? (
+        ) : isCreatingOrder ? (
+          <GlassCard style={styles.searchCard}>
+            <View style={styles.searchHeader}>
+              <View style={styles.searchIcon}>
+                <ActivityIndicator color="#111111" />
+              </View>
+              <View style={styles.searchText}>
+                <Text style={styles.searchTitle}>Создаём заказ...</Text>
+                <Text style={styles.searchSubtitle}>Отправляем запрос на сервер</Text>
+              </View>
+            </View>
+          </GlassCard>
+        ) : isOrderSearching ? (
           <GlassCard style={styles.searchCard}>
             <View style={styles.searchHeader}>
               <View style={styles.searchIcon}>
                 <Ionicons color="#111111" name="radio-outline" size={24} />
               </View>
               <View style={styles.searchText}>
-                <Text style={styles.searchTitle}>Searching for a nearby driver</Text>
+                <Text style={styles.searchTitle}>Ищем водителя...</Text>
                 <Text style={styles.searchSubtitle}>
-                  {selectedTariffDetails.title} | {selectedTariffDetails.eta} | {getTariffPrice(selectedTariffDetails)}
+                  {selectedTariffDetails
+                    ? `${selectedTariffTitle} · ${getTariffPriceLabel(selectedTariffDetails)}`
+                    : selectedTariffTitle}
                 </Text>
-                {orderId ? <Text style={styles.orderIdText}>Order #{orderId.slice(0, 8)}</Text> : null}
+                {displayOrderId ? (
+                  <Text style={styles.orderIdText}>
+                    Заказ #{displayOrderId.slice(0, 8)}
+                    {__DEV__ ? ` · ${displayOrderId}` : ''}
+                  </Text>
+                ) : null}
               </View>
             </View>
           </GlassCard>
+        ) : isTariffsLoading ? (
+          <View style={styles.tariffState}>
+            <ActivityIndicator color="#111111" />
+            <Text style={styles.tariffLoadingText}>Загрузка тарифов...</Text>
+          </View>
+        ) : tariffsError ? (
+          <View style={styles.tariffState}>
+            <Text style={styles.tariffStateText}>{tariffsError}</Text>
+            <AppButton
+              onPress={() => void loadTariffs()}
+              size="md"
+              style={styles.retryButton}
+              title="Повторить"
+              variant="outline"
+            />
+          </View>
         ) : (
           <ScrollView
             contentContainerStyle={styles.tariffList}
             horizontal
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
             showsHorizontalScrollIndicator={false}
           >
-            {tariffs.map((tariff) => (
+            {passengerTariffs.map((tariff) => (
               <TariffCard
-                description={tariff.eta}
+                etaMinutes={tariff.etaMinutes}
                 icon={<Ionicons color="#111111" name={tariff.icon} size={26} />}
                 key={tariff.id}
-                price={getTariffPrice(tariff)}
-                onPress={() => selectTariff(tariff.tariffClass)}
-                selected={rideState.selectedTariff === tariff.tariffClass}
+                price={getTariffPriceLabel(tariff)}
+                seats={tariff.seats > 0 ? tariff.seats : 4}
+                onPress={() => {
+                  if (__DEV__) {
+                    console.log('[customer ui] tariff selected', tariff.code);
+                  }
+                  selectTariff(tariff.code);
+                  setUserPickedTariff(true);
+                }}
+                selected={
+                  activeOrder
+                    ? activeOrder.tariff === tariff.code
+                    : rideState.selectedTariff === tariff.code
+                }
                 style={styles.tariffCard}
                 title={tariff.title}
               />
@@ -713,49 +751,72 @@ export function HomeScreen({
           </ScrollView>
         )}
 
-        {!isDriverFound && !isRideStarted && !isRideCompleted ? (
-          <AppButton
-            disabled={isCreatingOrder || isSearchingDriver || Boolean(orderId)}
-            loading={isCreatingOrder}
-            onPress={handleOrderPress}
-            style={[styles.orderButton, !canCreateOrder && styles.orderButtonDisabled]}
-            title={
-              isSearchingDriver || isCreatingOrder
-                ? 'Searching...'
-                  : !hasPickup
-                  ? 'Подождите, определяем адрес'
-                  : !hasDestination
-                    ? 'Куда поедем?'
-                    : isRouteLoading
-                      ? 'Считаем маршрут...'
-                      : routeErrorMessage
-                        ? 'Цена уточняется'
-                        : !routeReady
-                          ? 'Считаем маршрут...'
-                      : 'Order'
-            }
-          />
-        ) : null}
-        {isSearchingDriver || isDriverFound ? (
+        {isOrderSearching || isOrderDriverFound || isOrderRiding ? (
           <AppButton
             onPress={handleCancelRideState}
             size="md"
             style={styles.cancelButton}
-            title="Cancel"
+            title="Отменить"
             variant="outline"
           />
         ) : null}
       </BottomSheetPanel>
 
-      {isDestinationSearchOpen ? (
-        <View style={styles.searchOverlay}>
-          <DestinationSearchScreen
-            initialQuery={destinationAddress}
-            onBack={() => setIsDestinationSearchOpen(false)}
-            onSelect={handleDestinationSelected}
-          />
-        </View>
-      ) : null}
+      <View style={styles.bottomNav} pointerEvents="box-none">
+        <Pressable
+          accessibilityRole="button"
+          hitSlop={12}
+          onPress={onOpenHistory}
+          style={({ pressed }) => [styles.bottomNavSide, pressed && styles.bottomNavPressed]}
+        >
+          <Ionicons color="#111111" name="person-outline" size={22} />
+          <Text style={styles.bottomNavLabel}>Профиль</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={orderFabBlocked}
+          onPress={handleOrderPress}
+          style={({ pressed }) => [
+            styles.orderFab,
+            pressed && !orderFabBlocked && styles.orderFabPressed,
+            isTariffsLoading && styles.orderFabDisabledLoading,
+            isCreatingOrder && styles.orderFabSubmitting,
+            (isOrderSearching || isOrderDriverFound || isOrderRiding) &&
+              styles.orderFabDisabledLoading,
+          ]}
+        >
+          {isCreatingOrder ? (
+            <View style={styles.orderFabInnerRow}>
+              <ActivityIndicator color="#FFFFFF" />
+              <Text style={styles.orderFabTitle}>Создаём заказ...</Text>
+            </View>
+          ) : isTariffsLoading ? (
+            <ActivityIndicator color="#111111" />
+          ) : isOrderSearching ? (
+            <View style={styles.orderFabInnerRow}>
+              <ActivityIndicator color="#111111" />
+              <Text style={[styles.orderFabTitle, styles.orderFabTitleMuted]}>
+                Ищем водителя...
+              </Text>
+            </View>
+          ) : isOrderDriverFound || isOrderRiding ? (
+            <Text style={[styles.orderFabTitle, styles.orderFabTitleMuted]}>Заказ активен</Text>
+          ) : (
+            <Text style={styles.orderFabTitle}>Заказать</Text>
+          )}
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          hitSlop={12}
+          onPress={() => Alert.alert('Параметры')}
+          style={({ pressed }) => [styles.bottomNavSide, pressed && styles.bottomNavPressed]}
+        >
+          <Ionicons color="#111111" name="options-outline" size={22} />
+          <Text style={styles.bottomNavLabel}>Параметры</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -766,72 +827,149 @@ const styles = StyleSheet.create({
     backgroundColor: '#F6F7F9',
   },
   topLayer: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    right: 0,
+    zIndex: 22,
+    elevation: 22,
     paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  topButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    paddingTop: 8,
   },
   addressCard: {
-    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.06)',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 22,
+    elevation: 10,
   },
-  addressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  addressCardPressed: {
+    opacity: 0.96,
   },
-  addressContent: {
-    flex: 1,
-    minWidth: 0,
+  addressHeaderRow: {
+    marginBottom: 4,
   },
   fieldLabel: {
     color: '#667085',
     fontSize: 12,
     fontWeight: '800',
+    letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
-  addressInput: {
-    minHeight: 34,
-    padding: 0,
+  addressRowMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  addressPrimary: {
+    flex: 1,
+    minWidth: 0,
     color: '#111111',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
   },
   addressPlaceholder: {
     color: '#98A2B3',
+    fontWeight: '700',
   },
-  destinationFieldButton: {
-    minHeight: 34,
+  addressDivider: {
+    height: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.08)',
+    marginVertical: 12,
+  },
+  addRound: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
     justifyContent: 'center',
-  },
-  routeDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 4,
-    borderColor: '#FFD400',
     backgroundColor: '#111111',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  routeDotDestination: {
-    borderColor: '#111111',
-    backgroundColor: '#FFD400',
+  destinationRowPressable: {
+    marginHorizontal: -4,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  routeLine: {
-    width: 1,
-    height: 16,
-    marginLeft: 6.5,
-    backgroundColor: 'rgba(17,17,17,0.16)',
+  destinationModalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
   },
-  quickPlaces: {
+  destinationModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+  },
+  destinationModalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 28,
+    maxHeight: '88%',
+    borderTopWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.08)',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 20,
+  },
+  destinationModalHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    marginBottom: 14,
+    backgroundColor: 'rgba(17, 17, 17, 0.12)',
+  },
+  destinationModalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#111111',
+    marginBottom: 12,
+  },
+  destinationModalRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 16,
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(15, 23, 42, 0.06)',
   },
-  quickPlaceSelected: {
-    borderColor: 'rgba(255,212,0,0.95)',
-    backgroundColor: 'rgba(255,255,255,0.72)',
+  destinationModalRowPressed: {
+    backgroundColor: 'rgba(255, 212, 0, 0.18)',
+  },
+  destinationModalRowLabel: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111111',
+  },
+  destinationModalCancel: {
+    marginTop: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  destinationModalCancelPressed: {
+    opacity: 0.7,
+  },
+  destinationModalCancelText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#667085',
   },
   centerPinWrap: {
     position: 'absolute',
@@ -840,7 +978,7 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     transform: [{ translateY: -52 }],
-    zIndex: 1,
+    zIndex: 6,
   },
   etaBubble: {
     alignItems: 'center',
@@ -849,7 +987,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: 'rgba(255,255,255,0.86)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
     shadowColor: '#101828',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.12,
@@ -895,7 +1033,7 @@ const styles = StyleSheet.create({
     left: '30%',
     width: 170,
     height: 92,
-    zIndex: 0,
+    zIndex: 2,
   },
   mockRouteLine: {
     position: 'absolute',
@@ -929,52 +1067,48 @@ const styles = StyleSheet.create({
   mapActions: {
     position: 'absolute',
     right: 16,
-    bottom: 316,
+    bottom: BOTTOM_NAV_HEIGHT + 200,
     gap: 12,
+    zIndex: 15,
+    elevation: 15,
   },
   sheet: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 0,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 14,
-  },
-  sheetTitle: {
-    color: '#111111',
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  sheetSubtitle: {
-    marginTop: 3,
-    color: '#667085',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  sheetBadge: {
-    overflow: 'hidden',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#FFD400',
-    color: '#111111',
-    fontSize: 12,
-    fontWeight: '900',
+    zIndex: 18,
+    elevation: 18,
   },
   tariffList: {
-    paddingRight: 20,
+    paddingRight: 12,
     gap: 10,
-    marginTop: 16,
+    paddingBottom: 4,
+  },
+  tariffState: {
+    minHeight: 104,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  tariffStateText: {
+    color: '#667085',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  tariffLoadingText: {
+    marginTop: 8,
+    color: '#667085',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  retryButton: {
+    minWidth: 150,
+    shadowOpacity: 0.04,
   },
   tariffCard: {
-    width: 218,
+    width: 248,
   },
   searchCard: {
-    marginTop: 16,
     padding: 16,
   },
   searchHeader: {
@@ -1011,8 +1145,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
+  driverFoundLabel: {
+    marginBottom: 10,
+    color: '#667085',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
   driverCard: {
-    marginTop: 16,
     padding: 16,
   },
   driverTopRow: {
@@ -1069,7 +1210,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 9,
     paddingVertical: 5,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#F6F7F9',
     color: '#111111',
     fontSize: 13,
     fontWeight: '900',
@@ -1098,19 +1239,86 @@ const styles = StyleSheet.create({
     flex: 1,
     shadowOpacity: 0.08,
   },
-  orderButton: {
-    marginTop: 16,
-  },
-  orderButtonDisabled: {
-    opacity: 0.72,
-  },
   cancelButton: {
-    marginTop: 10,
+    marginTop: 12,
     shadowOpacity: 0.04,
   },
-  searchOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  bottomNav: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    minHeight: BOTTOM_NAV_HEIGHT,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(15, 23, 42, 0.06)',
     zIndex: 20,
+    elevation: 24,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+  },
+  bottomNavSide: {
+    width: 76,
+    alignItems: 'center',
+    gap: 4,
+  },
+  bottomNavLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#111111',
+  },
+  bottomNavPressed: {
+    opacity: 0.72,
+  },
+  orderFab: {
+    minWidth: 168,
+    maxWidth: 260,
+    height: 52,
+    paddingHorizontal: 20,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#111111',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  orderFabPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
+  },
+  orderFabDisabledLoading: {
+    backgroundColor: '#CBD5E1',
+    shadowOpacity: 0.06,
+    elevation: 2,
+  },
+  orderFabSubmitting: {
+    opacity: 0.88,
+  },
+  orderFabTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  orderFabTitleMuted: {
+    color: '#111111',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  orderFabInnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 4,
   },
 });
-

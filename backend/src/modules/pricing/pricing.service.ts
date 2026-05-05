@@ -43,6 +43,25 @@ export interface FareBreakdown {
   total: number;
 }
 
+/** Публичный тариф для пассажирских приложений (GET /tariffs). */
+export interface CustomerPublicTariff {
+  id: string;
+  code: string;
+  title: string;
+  isActive: boolean;
+  sortOrder: number;
+  baseFare: number;
+  pricePerKm: number;
+  pricePer100m?: number;
+  etaMinutes: number;
+  seats: number;
+  minimumFare: number;
+  /** Для отображения условий ожидания / разбивки в клиенте (источник — БД / админка). */
+  freeWaitingMinutes: number;
+  waitingPerMinute: number;
+  stopPerMinute: number;
+}
+
 export const DEFAULT_ANGREN_TARIFFS: Record<TariffClass, AngrenTariff> = {
   STANDARD: {
     tariffClass: TariffClassValue.STANDARD,
@@ -150,7 +169,48 @@ export class PricingService {
 
   findTariffs() {
     return this.prisma.tariff.findMany({
-      orderBy: [{ active: 'desc' }, { tariffClass: 'asc' }],
+      orderBy: [{ active: 'desc' }, { sortOrder: 'asc' }, { tariffClass: 'asc' }],
+    });
+  }
+
+  findCustomerTariffs(): Promise<CustomerPublicTariff[]> {
+    return this.prisma.tariff
+      .findMany({
+        where: { active: true },
+        orderBy: [{ sortOrder: 'asc' }, { tariffClass: 'asc' }],
+      })
+      .then((rows) =>
+        rows.map((r) => ({
+          id: r.id,
+          code: r.tariffClass,
+          title:
+            r.title.trim() || defaultPassengerTitle(r.tariffClass),
+          isActive: r.active,
+          sortOrder: r.sortOrder,
+          baseFare: r.baseFare,
+          pricePerKm: r.perKm,
+          pricePer100m: r.pricePer100m ?? undefined,
+          etaMinutes: r.etaMinutes,
+          seats: r.seats,
+          minimumFare: r.minimumFare,
+          freeWaitingMinutes: r.freeWaitingMinutes,
+          waitingPerMinute: r.waitingPerMinute,
+          stopPerMinute: r.stopPerMinute,
+        })),
+      );
+  }
+
+  findActiveTariffs() {
+    return this.prisma.tariff.findMany({
+      where: { active: true },
+      select: {
+        tariffClass: true,
+        minimumFare: true,
+        perKm: true,
+        baseFare: true,
+        freeWaitingMinutes: true,
+      },
+      orderBy: { tariffClass: 'asc' },
     });
   }
 
@@ -165,7 +225,12 @@ export class PricingService {
         waitingPerMinute: dto.waitingPerMinute,
         stopPerMinute: dto.stopPerMinute,
         minimumFare: dto.minimumFare,
-        active: dto.active,
+        active: dto.active ?? true,
+        title: dto.title ?? defaultPassengerTitle(dto.tariffClass),
+        sortOrder: dto.sortOrder ?? defaultSortOrder(dto.tariffClass),
+        etaMinutes: dto.etaMinutes ?? 5,
+        seats: dto.seats ?? 4,
+        pricePer100m: dto.pricePer100m ?? null,
       },
     });
   }
@@ -191,4 +256,34 @@ export class PricingService {
 
 function roundMoneyInput(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function defaultPassengerTitle(tariffClass: string): string {
+  switch (tariffClass) {
+    case TariffClassValue.STANDARD:
+      return 'Стандарт';
+    case TariffClassValue.COMFORT:
+      return 'Комфорт';
+    case TariffClassValue.COMFORT_PLUS:
+      return 'Комфорт+';
+    case TariffClassValue.DELIVERY:
+      return 'Доставка';
+    default:
+      return tariffClass;
+  }
+}
+
+function defaultSortOrder(tariffClass: string): number {
+  switch (tariffClass) {
+    case TariffClassValue.STANDARD:
+      return 1;
+    case TariffClassValue.COMFORT:
+      return 2;
+    case TariffClassValue.COMFORT_PLUS:
+      return 3;
+    case TariffClassValue.DELIVERY:
+      return 4;
+    default:
+      return 99;
+  }
 }

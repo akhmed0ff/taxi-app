@@ -133,27 +133,6 @@ Done when:
 - Operations metrics are visible.
 - Admin can open a ride details page from the active orders table.
 
-## Stage 5.5 - Passenger Web MVP
-
-Goal: allow passengers to order a taxi from a browser.
-
-Scope:
-
-- Next.js + TypeScript web app in `web/`.
-- Auth pages: `/login`, `/register`.
-- Ride creation page: `/order`.
-- Realtime ride page: `/trip/[id]` with Socket.IO JWT auth and `order.join`.
-- Passenger ride history page: `/history`.
-- Manual pickup/dropoff address and coordinate inputs for MVP.
-- Tariff selection: `ECONOMY`, `COMFORT`, `PREMIUM`.
-
-Done when:
-
-- Passenger can register or login in the browser.
-- Passenger can create a ride through `POST /orders`.
-- Ride page listens to `DRIVER_ACCEPTED`, `DRIVER_LOCATION`, `TRIP_STARTED`, `TRIP_COMPLETED` and `RIDE_CANCELLED`.
-- Passenger can open ride history from `GET /orders/history/passenger`.
-
 ## Stage 6 - Payment
 
 Goal: make completed trips financially correct.
@@ -213,8 +192,6 @@ Already started:
 - Admin panel connected to backend API for drivers, active orders, tariffs and basic analytics with Socket.IO live refresh.
 - Ride history endpoints for passenger and driver with `active`, `completed` and `cancelled` filters.
 - Passenger and driver apps show ride history.
-- Passenger web MVP exists in `web/` with auth, order creation, realtime trip tracking and history.
-- Web order page supports Mapbox markers for pickup/dropoff when `NEXT_PUBLIC_MAPBOX_TOKEN` is configured.
 - Customer and driver apps use minimal maps for pickup/dropoff, route context and driver position.
 - Admin can open ride details with passenger, driver, route, fare and status history.
 - Docker and CI/CD baseline.
@@ -231,3 +208,4 @@ Next best focus:
 1. Add endpoint-level tests around protected admin/order/driver HTTP routes.
 2. Replace local admin dev-login fallback with seeded production admin credentials.
 3. Add backend aggregate endpoints for completed/cancelled analytics instead of deriving only basic live metrics from current admin API calls.
+4. Remove legacy pbkdf2 password verification after the bcrypt migration monitor (`npm run check:legacy-hashes`) reports zero remaining hashes; target date: 2026-08-05.

@@ -1,4 +1,3 @@
-import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import { Alert, SafeAreaView, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -27,6 +26,8 @@ import { OnlineScreen } from './src/screens/OnlineScreen';
 import { OrderOfferScreen } from './src/screens/OrderOfferScreen';
 import { TripScreen } from './src/screens/TripScreen';
 import { DriverStatus } from './src/types/order';
+import { FLAGS } from './src/config/flags';
+import { DEV_DRIVER_COORDS } from './src/dev/devLocations';
 
 type Screen = 'auth' | 'online' | 'offer' | 'navigation' | 'trip' | 'balance' | 'history';
 
@@ -162,18 +163,10 @@ export default function App() {
       }
 
       if (nextStatus === 'ONLINE') {
-        const permission = await Location.requestForegroundPermissionsAsync();
-
-        if (permission.status !== 'granted') {
-          console.warn('Location permission is required to go online');
-          return;
+        if (FLAGS.USE_DEV_COORDS) {
+          // Dev flow: fixed Angren coordinates, no geolocation required.
+          setDriverPosition(DEV_DRIVER_COORDS);
         }
-
-        const location = await Location.getCurrentPositionAsync({});
-        setDriverPosition({
-          lat: location.coords.latitude,
-          lng: location.coords.longitude,
-        });
       }
 
       await updateDriverStatus(session.accessToken, session.driverId, nextStatus);
@@ -182,17 +175,15 @@ export default function App() {
       goOnline();
 
       if (nextStatus === 'ONLINE') {
-        const location = await Location.getCurrentPositionAsync({});
         await updateDriverLocation(
           session.accessToken,
           session.driverId,
-          location.coords.latitude,
-          location.coords.longitude,
+          FLAGS.USE_DEV_COORDS ? DEV_DRIVER_COORDS.lat : DEV_DRIVER_COORDS.lat,
+          FLAGS.USE_DEV_COORDS ? DEV_DRIVER_COORDS.lng : DEV_DRIVER_COORDS.lng,
         );
-        setDriverPosition({
-          lat: location.coords.latitude,
-          lng: location.coords.longitude,
-        });
+        if (FLAGS.USE_DEV_COORDS) {
+          setDriverPosition(DEV_DRIVER_COORDS);
+        }
       }
     } catch (error) {
       console.warn(error);

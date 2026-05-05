@@ -18,6 +18,10 @@ export class GeoService {
     return this.redis.setDriverOffline(driverId);
   }
 
+  async getDriverLocation(driverId: string) {
+    return this.redis.getDriverLocation(driverId);
+  }
+
   async findNearbyDrivers(
     lat: number,
     lng: number,

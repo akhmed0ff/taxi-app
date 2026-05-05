@@ -15,10 +15,12 @@ import {
   ensurePassengerDevSession,
   loginPassenger,
   logoutPassenger,
+  rateRide,
   refreshPassengerSession,
 } from './src/services/api';
 import { realtimeClient } from './src/services/realtime';
 import { Order, Point, TariffClass } from './src/types/order';
+import { OrderStatus } from './src/types/orderStatus';
 
 type Screen = 'auth' | 'home' | 'tariff' | 'search' | 'trip' | 'complete' | 'history';
 
@@ -82,18 +84,22 @@ export default function App() {
 
         const nextOrder = { ...current, ...payload };
 
+        if (nextOrder.status !== current.status) {
+          console.log('[customer socket] order updated');
+        }
+
         if (
-          nextOrder.status === 'DRIVER_ARRIVED' ||
-          nextOrder.status === 'IN_PROGRESS'
+          nextOrder.status === OrderStatus.ARRIVING ||
+          nextOrder.status === OrderStatus.IN_PROGRESS
         ) {
           setScreen('home');
         }
 
-        if (nextOrder.status === 'COMPLETED') {
-          setScreen('home');
+        if (nextOrder.status === OrderStatus.COMPLETED) {
+          setScreen('complete');
         }
 
-        if (nextOrder.status === 'CANCELLED') {
+        if (nextOrder.status === OrderStatus.CANCELLED) {
           setScreen('home');
           return undefined;
         }
@@ -117,7 +123,7 @@ export default function App() {
         tariff,
       });
       setOrder({ ...createdOrder, price: createdOrder.price || price });
-      setScreen('search');
+      setScreen('home');
     } catch (error) {
       console.warn(error);
       setScreen('tariff');
@@ -169,6 +175,14 @@ export default function App() {
     }
   }
 
+  async function handleRateRide(rating: 1 | 2 | 3 | 4 | 5) {
+    if (!session || !order) {
+      return;
+    }
+
+    await rateRide(session.accessToken, order.id, rating);
+  }
+
   async function handleLogout() {
     if (session?.refreshToken) {
       try {
@@ -195,8 +209,10 @@ export default function App() {
       {screen === 'home' && (
         <HomeScreen
           onCancelOrder={handleCancelOrder}
+          onOrderCreated={(nextOrder) => {
+            setOrder(nextOrder);
+          }}
           onLogout={handleLogout}
-          onOrderRequested={handleHomeOrderRequested}
           onOpenHistory={() => setScreen('history')}
           order={order}
         />
@@ -229,6 +245,7 @@ export default function App() {
             setOrder(undefined);
             setScreen('home');
           }}
+          onRate={handleRateRide}
           order={order}
         />
       )}

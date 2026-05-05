@@ -45,4 +45,13 @@ export class CreateOrderDto {
   @IsString()
   @IsIn(TARIFF_CLASS_VALUES)
   tariffClass?: TariffClass = DEFAULT_TARIFF_CLASS;
+
+  @ApiPropertyOptional({
+    description:
+      'Optional Tariff row id from GET /tariffs; must be active and match tariffClass when both are sent.',
+    example: 'cltxyz123',
+  })
+  @IsOptional()
+  @IsString()
+  tariffId?: string;
 }

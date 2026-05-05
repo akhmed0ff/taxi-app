@@ -1,11 +1,7 @@
 export type DriverStatus = 'OFFLINE' | 'ONLINE' | 'BUSY';
 
-export type TripStatus =
-  | 'OFFERED'
-  | 'ACCEPTED'
-  | 'DRIVER_ARRIVED'
-  | 'IN_PROGRESS'
-  | 'COMPLETED';
+export { OrderStatus } from './orderStatus';
+export type { OrderStatus as OrderStatusType } from './orderStatus';
 
 export interface Coords {
   lat: number;
@@ -25,13 +21,13 @@ export interface OrderOffer {
 }
 
 export interface ActiveTrip extends OrderOffer {
-  status: TripStatus;
+  status: import('./orderStatus').OrderStatus;
 }
 
 export type RideHistoryFilter = 'active' | 'completed' | 'cancelled';
 
 export interface RideHistoryItem extends Omit<ActiveTrip, 'status'> {
-  status: TripStatus | 'CANCELLED';
+  status: import('./orderStatus').OrderStatus;
   createdAt?: string;
   passengerName?: string;
   paymentStatus?: string;

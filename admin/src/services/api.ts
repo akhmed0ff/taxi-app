@@ -56,9 +56,17 @@ export interface AdminOrder {
 export interface AdminTariff {
   key: string;
   name: string;
+  title: string;
+  sortOrder: number;
+  etaMinutes: number;
+  seats: number;
+  pricePer100m?: number | null;
   baseFare: number;
   perKm: number;
   perMinute: number;
+  minimumFare: number;
+  freeWaitingMinutes: number;
+  stopPerMinute: number;
   surge: number;
   active: boolean;
 }
@@ -120,6 +128,14 @@ interface BackendDriver {
   rides?: Array<{ createdAt: string }>;
 }
 
+interface PaginatedBackendDrivers {
+  data: BackendDriver[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 interface BackendRide {
   id: string;
   status: OrderStatus;
@@ -153,6 +169,11 @@ interface BackendTariff {
   id: string;
   city: string;
   tariffClass: string;
+  title: string;
+  sortOrder: number;
+  etaMinutes: number;
+  seats: number;
+  pricePer100m?: number | null;
   baseFare: number;
   perKm: number;
   freeWaitingMinutes: number;
@@ -173,9 +194,30 @@ export const statusLabels: Record<OrderStatus, string> = {
 
 let adminAccessToken: string | undefined;
 
+export interface AdminDriversPage {
+  data: AdminDriver[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export async function fetchAdminDriversPage(page = 1, limit = 20): Promise<AdminDriversPage> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  const data = await apiFetch<PaginatedBackendDrivers>(`/drivers?${params.toString()}`);
+
+  return {
+    ...data,
+    data: data.data.map(mapBackendDriver),
+  };
+}
+
 export async function fetchAdminDrivers() {
-  const data = await apiFetch<BackendDriver[]>('/drivers');
-  return data.map(mapBackendDriver);
+  const page = await fetchAdminDriversPage(1, 100);
+  return page.data;
 }
 
 export async function fetchActiveOrders() {
@@ -209,12 +251,17 @@ export async function saveTariff(tariff: AdminTariff) {
     body: JSON.stringify({
       city: 'Angren',
       tariffClass: normalizeTariffClass(tariff.name),
+      title: tariff.title,
+      sortOrder: tariff.sortOrder,
+      etaMinutes: tariff.etaMinutes,
+      seats: tariff.seats,
+      pricePer100m: tariff.pricePer100m ?? undefined,
       baseFare: tariff.baseFare,
       perKm: tariff.perKm,
-      freeWaitingMinutes: 3,
+      freeWaitingMinutes: tariff.freeWaitingMinutes,
       waitingPerMinute: tariff.perMinute,
-      stopPerMinute: 500,
-      minimumFare: Math.max(tariff.baseFare, 12000),
+      stopPerMinute: tariff.stopPerMinute,
+      minimumFare: tariff.minimumFare,
       active: tariff.active,
     }),
   });
@@ -364,26 +411,57 @@ function mapBackendTariff(tariff: BackendTariff): AdminTariff {
   return {
     key: tariff.id,
     name: tariff.tariffClass,
+    title: tariff.title?.trim() ? tariff.title : tariff.tariffClass,
+    sortOrder: tariff.sortOrder ?? 0,
+    etaMinutes: tariff.etaMinutes ?? 5,
+    seats: tariff.seats ?? 4,
+    pricePer100m: tariff.pricePer100m ?? null,
     baseFare: tariff.baseFare,
     perKm: tariff.perKm,
     perMinute: tariff.waitingPerMinute,
+    minimumFare: tariff.minimumFare,
+    freeWaitingMinutes: tariff.freeWaitingMinutes,
+    stopPerMinute: tariff.stopPerMinute,
     surge: 1,
     active: tariff.active,
   };
 }
 
+const KNOWN_TARIFF_CODES = new Set([
+  'STANDARD',
+  'COMFORT',
+  'COMFORT_PLUS',
+  'DELIVERY',
+]);
+
 function normalizeTariffClass(name: string) {
-  const value = name.toUpperCase();
+  const value = name.toUpperCase().trim();
+
+  if (KNOWN_TARIFF_CODES.has(value)) {
+    return value;
+  }
+
+  if (value.includes('COMFORT') && value.includes('PLUS')) {
+    return 'COMFORT_PLUS';
+  }
 
   if (value.includes('COMFORT') || value.includes('КОМФОРТ')) {
     return 'COMFORT';
   }
 
-  if (value.includes('PREMIUM') || value.includes('ПРЕМИУМ')) {
-    return 'PREMIUM';
+  if (value.includes('DELIVERY') || value.includes('ДОСТАВК')) {
+    return 'DELIVERY';
   }
 
-  return 'ECONOMY';
+  if (value.includes('PREMIUM') || value.includes('ПРЕМИУМ')) {
+    return 'COMFORT_PLUS';
+  }
+
+  if (value.includes('ECONOMY') || value.includes('STANDARD')) {
+    return 'STANDARD';
+  }
+
+  return 'STANDARD';
 }
 
 function formatVehicle(vehicle?: BackendVehicle) {

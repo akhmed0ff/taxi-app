@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MapPlaceholder } from '../components/MapPlaceholder';
 import { t } from '../i18n';
 import { Order } from '../types/order';
+import { OrderStatus } from '../types/orderStatus';
 
 interface TripScreenProps {
   order: Order;
@@ -10,7 +11,7 @@ interface TripScreenProps {
 }
 
 export function TripScreen({ onCancel, order }: TripScreenProps) {
-  const canCancel = order.status !== 'IN_PROGRESS';
+  const canCancel = order.status !== OrderStatus.IN_PROGRESS;
   const copy = getTripCopy(order.status);
 
   return (
@@ -69,8 +70,11 @@ export function TripScreen({ onCancel, order }: TripScreenProps) {
 
         <View style={styles.progressBox}>
           <ProgressStep active label="Водитель найден" />
-          <ProgressStep active={order.status === 'DRIVER_ARRIVED' || order.status === 'IN_PROGRESS'} label="На месте" />
-          <ProgressStep active={order.status === 'IN_PROGRESS'} label="Поездка" />
+          <ProgressStep
+            active={order.status === OrderStatus.ARRIVING || order.status === OrderStatus.IN_PROGRESS}
+            label="На месте"
+          />
+          <ProgressStep active={order.status === OrderStatus.IN_PROGRESS} label="Поездка" />
         </View>
 
         {order.driverLocation && (
@@ -122,7 +126,7 @@ function FareRow({
 }
 
 function getTripCopy(status: Order['status']) {
-  if (status === 'DRIVER_ARRIVED') {
+  if (status === OrderStatus.ARRIVING) {
     return {
       title: t('driverArrived'),
       subtitle: 'Выходите к точке подачи',
@@ -130,7 +134,7 @@ function getTripCopy(status: Order['status']) {
     };
   }
 
-  if (status === 'IN_PROGRESS') {
+  if (status === OrderStatus.IN_PROGRESS) {
     return {
       title: t('tripInProgress'),
       subtitle: 'Следим за поездкой до точки назначения',

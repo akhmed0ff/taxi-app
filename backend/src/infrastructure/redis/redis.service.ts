@@ -116,6 +116,21 @@ export class RedisService implements OnModuleDestroy {
     return drivers;
   }
 
+  async getDriverLocation(driverId: string) {
+    const [position] = await this.client.geopos(this.driversGeoKey, driverId);
+
+    if (!position) {
+      return null;
+    }
+
+    const [lng, lat] = position;
+
+    return {
+      lat: Number(lat),
+      lng: Number(lng),
+    };
+  }
+
   async createRideOffer(rideId: string, driverId: string, ttlSeconds = 10) {
     const key = this.rideOfferKey(rideId, driverId);
     this.logger.log(

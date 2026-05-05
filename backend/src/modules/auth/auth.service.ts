@@ -75,6 +75,7 @@ export class AuthService {
     const validPassword = await this.verifyPassword(
       dto.password,
       user.passwordHash,
+      user.id,
     );
 
     if (!validPassword) {
@@ -227,15 +228,35 @@ export class AuthService {
     });
   }
 
-  private async hashPassword(password: string) {
+  private async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
   }
 
-  private async verifyPassword(password: string, passwordHash: string) {
+  private async verifyPassword(
+    password: string,
+    passwordHash: string,
+    userId?: string,
+  ): Promise<boolean> {
     if (passwordHash.startsWith('$2')) {
       return bcrypt.compare(password, passwordHash);
     }
 
+    // Legacy pbkdf2 support can be removed after 2026-08-05 once
+    // scripts/check-legacy-hashes.ts reports zero remaining hashes.
+    const valid = await this.verifyPbkdf2(password, passwordHash);
+
+    if (valid && userId) {
+      const newHash = await this.hashPassword(password);
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash: newHash },
+      });
+    }
+
+    return valid;
+  }
+
+  private async verifyPbkdf2(password: string, passwordHash: string) {
     const [scheme, digest, iterations, salt, key] = passwordHash.split('$');
 
     if (scheme !== 'pbkdf2' || !digest || !iterations || !salt || !key) {

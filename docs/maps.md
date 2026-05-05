@@ -2,25 +2,6 @@
 
 ANGREN TAXI uses a lightweight maps setup for the MVP. The goal is to show ride context, not to provide full navigation or geocoding yet.
 
-## Web Mapbox
-
-The passenger web app in `web/` uses Mapbox GL JS on `/order`.
-
-Environment:
-
-```env
-NEXT_PUBLIC_MAPBOX_TOKEN=pk.your-mapbox-public-token
-MAPBOX_ACCESS_TOKEN=pk.your-mapbox-backend-token
-NEXT_PUBLIC_API_URL=http://localhost:3000
-```
-
-Behavior:
-
-- The map is shown on `/order`.
-- Pickup and dropoff markers update from the manual coordinate fields.
-- If `NEXT_PUBLIC_MAPBOX_TOKEN` is missing, the page shows a coordinate fallback.
-- No geocoding is performed in the MVP. Users still enter address text and lat/lng manually.
-
 ## Backend Mapbox
 
 The backend uses `MAPBOX_ACCESS_TOKEN` through `MapboxService`.
@@ -37,19 +18,6 @@ Health check:
 
 ```bash
 curl http://localhost:3000/health/mapbox
-```
-
-Local check:
-
-```bash
-cd web
-npm run dev
-```
-
-Open:
-
-```text
-http://localhost:3002/order
 ```
 
 ## Customer App

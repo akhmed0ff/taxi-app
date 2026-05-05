@@ -37,11 +37,18 @@ export class DriverRealtimeClient {
 
     if (driverId) {
       this.socket.on('connect', () => {
+        // Debug: make realtime delivery transparent.
+        console.log('[driver socket] connected');
         this.socket?.emit('driver.join', { driverId });
+        console.log('[driver socket] joined rooms');
         onConnectionChange?.(true);
       });
     } else {
-      this.socket.on('connect', () => onConnectionChange?.(true));
+      this.socket.on('connect', () => {
+        console.log('[driver socket] connected');
+        console.log('[driver socket] joined rooms');
+        onConnectionChange?.(true);
+      });
     }
 
     this.socket.on('disconnect', () => onConnectionChange?.(false));
@@ -79,6 +86,7 @@ export class DriverRealtimeClient {
       lastOfferId = ride.id;
       ack?.({ ok: true });
 
+      console.log('[driver socket] offer received');
       handler({
         id: ride.id,
         pickupAddress: ride.pickupAddress ?? 'Pickup',
@@ -98,13 +106,14 @@ export class DriverRealtimeClient {
       });
     };
 
+    // Support both legacy and new event names.
+    this.socket?.on('new_ride_offer', wrappedHandler);
     this.socket?.on('ride.offer', wrappedHandler);
     this.socket?.on('NEW_ORDER', wrappedHandler);
-    this.socket?.on('new_ride_offer', wrappedHandler);
     return () => {
+      this.socket?.off('new_ride_offer', wrappedHandler);
       this.socket?.off('ride.offer', wrappedHandler);
       this.socket?.off('NEW_ORDER', wrappedHandler);
-      this.socket?.off('new_ride_offer', wrappedHandler);
     };
   }
 
